@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.0.0">
+<meta name="app-version" content="1.1.0">
 <title>Git Getter</title>
 <style>
 :root{--bg:#f4f6fa;--card:#fff;--ink:#1c2333;--sub:#5b6478;--line:#dde2ec;--brand:#1f3864;--accent:#2e6be6;
@@ -71,6 +71,16 @@ h2{font-size:18px;margin:0 0 8px}h3{font-size:15px;margin:14px 0 6px}
 .spin{display:inline-block;width:16px;height:16px;border:2px solid #ccd;border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;vertical-align:middle}
 @keyframes sp{to{transform:rotate(360deg)}}
 .hidden{display:none!important}
+.star{background:none;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:15px;cursor:pointer;font-family:inherit}
+.star.on{background:#fff6d6;border-color:#e3b400}
+.notice{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:8px;margin:6px 0;font-size:14px}
+.notice.red{background:var(--redbg)}.notice.yellow{background:var(--yellowbg)}.notice.info{background:#e8f0fe}
+.notice .nx{margin-left:auto;background:none;border:none;font-size:16px;cursor:pointer;color:var(--sub)}
+.fav{padding:10px 0;border-bottom:1px solid var(--line)}
+.fav:last-child{border-bottom:none}
+.newtag{background:#ffcc33;color:#3a2a00;font-size:12px;font-weight:700;padding:1px 8px;border-radius:10px}
+.bell{position:relative}.bell b{position:absolute;top:-6px;right:-6px;background:#ff6b6b;color:#fff;font-size:11px;border-radius:9px;padding:0 5px}
+ol.steps{padding-left:22px;font-size:15px}ol.steps li{margin:4px 0}
 footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 </style>
 
@@ -85,6 +95,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
     <span class="ver" id="verLabel"></span>
     <span class="spacer"></span>
     <button class="hbtn updbtn hidden" id="updBtn"></button>
+    <button class="hbtn bell" id="bellBtn">🔔<b id="bellCnt" class="hidden"></b></button>
     <button class="hbtn" id="setBtn">⚙ 設定</button>
   </div>
   <div class="usage" id="usage"></div>
@@ -93,6 +104,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 <main>
   <!-- Search view -->
   <section id="searchView">
+    <div id="notices"></div>
     <div class="card">
       <div class="tabs" id="tabs">
         <button class="tab on" data-t="ai">💬 言葉で頼む</button>
@@ -100,6 +112,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
         <button class="tab" data-t="kw">🔎 キーワード</button>
         <button class="tab" data-t="rank">🏆 ランキング</button>
         <button class="tab" data-t="url">🔗 URL</button>
+        <button class="tab" data-t="fav">⭐ お気に入り</button>
       </div>
 
       <div data-p="ai">
@@ -129,7 +142,24 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
         <div class="row"><input type="text" id="urlText" placeholder="https://github.com/作者/アプリ名" style="flex:1"><button class="btn" id="urlGo">開く</button></div>
       </div>
 
-      <div class="filters">
+      <div data-p="fav" class="hidden">
+        <div class="row">
+          <button class="btn" id="favCheck">新しい版とウイルスを今すぐ確認</button>
+        </div>
+        <div class="note" id="favStatus" style="margin-top:6px"></div>
+        <div id="favList" style="margin-top:8px"></div>
+        <h3>ダウンロード履歴</h3>
+        <div id="dlList"></div>
+        <h3>MacとiPhoneで共有</h3>
+        <div class="note">お気に入りと履歴をファイルに書き出し、もう一方の端末で読み込みます。保存先を「iCloud Drive」にすると便利です。</div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn sub" id="expBtn">書き出す</button>
+          <label class="btn sub" style="margin:0">読み込む<input type="file" id="impFile" accept=".json,application/json" class="hidden"></label>
+          <button class="btn sub" id="helpBtn">iPhoneでの保存のしかた</button>
+        </div>
+      </div>
+
+      <div class="filters" id="filtersBox">
         <label><input type="checkbox" id="fMac"> Mac向けだけ</label>
         <label><input type="checkbox" id="fData"> データ集だけ</label>
         <label><input type="checkbox" id="fRecent"> 1年以内に更新</label>
@@ -182,7 +212,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -363,13 +393,19 @@ async function gemini(prompt){
 const POPULAR = ["obs-studio","vscode","yt-dlp","ffmpeg","handbrake","audacity","blender","gimp","vlc","stats","rectangle","iina","whisper","whisper.cpp","ollama","stable-diffusion-webui","comfyui","telegram","notepad-plus-plus","7zip","qbittorrent","keepassxc","bitwarden","krita","inkscape","shotcut","kdenlive","obsidian","raycast","alt-tab-macos","maccy","hiddenbar","lm-studio","open-webui","calibre","bitcoin","electrum","metamask","exodus"];
 function lev(a,b){ const m=a.length,n=b.length; if(Math.abs(m-n)>2) return 9; const d=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]); for(let j=1;j<=n;j++) d[0][j]=j;
   for(let i=1;i<=m;i++) for(let j=1;j<=n;j++) d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1)); return d[m][n]; }
-const DANGER = [
+const DANGER_BUILTIN = [
  [/(zip|rar|archive|file|extract)[^\n]{0,30}pass(word)?\s*[:：=]/i, "説明文に「パスワード付きの圧縮ファイル」の記載があります（ウイルス検査をすり抜ける手口）"],
  [/パスワード\s*[:：は]/, "説明文に「パスワード付きの圧縮ファイル」の記載があります（ウイルス検査をすり抜ける手口）"],
  [/\b(crack(ed)?|keygen|activator|serial key|license key generator|full version free|warez)\b/i, "「クラック」「有料ソフトが無料」などの危険な言葉があります"],
  [/(mediafire\.com|mega\.nz|anonfiles|gofile\.io|bit\.ly|tinyurl\.com|cutt\.ly|t\.me\/)/i, "GitHub以外のダウンロードサイトや短縮URLに誘導しています"],
  [/(disable|turn off)\s+(your\s+)?(antivirus|windows defender|defender)/i, "「ウイルス対策を切ってから使う」よう指示しています"],
 ];
+let DANGER = DANGER_BUILTIN.slice();
+function applyDangerList(j){
+  const extra = [];
+  for(const p of (j?.patterns||[])){ try{ extra.push([new RegExp(p.re, p.flags||"i"), String(p.msg||"危険なサインがあります")]); }catch(e){} }
+  DANGER = DANGER_BUILTIN.concat(extra);
+}
 function scoreRepo(repo, extra={}){
   const flags = []; // [level, text]
   const st = repo.stargazers_count||0;
@@ -546,7 +582,8 @@ function renderDetail(){
     <div id="dJa"></div>
     <div class="rdesc">${esc(repo.description||"（説明なし）")}</div>
     <div class="row" style="margin-top:6px"><button class="btn sub" id="transBtn" ${gemAvailable()?"":"disabled"}>説明を日本語に訳す</button>
-      <a class="btn sub" href="${esc(repo.html_url)}" target="_blank" rel="noopener">GitHubで見る</a></div>
+      <a class="btn sub" href="${esc(repo.html_url)}" target="_blank" rel="noopener">GitHubで見る</a>
+      <button class="star ${isFav(repo.full_name)?"on":""}" id="starBtn">${isFav(repo.full_name)?"★ お気に入り済み":"☆ お気に入りに追加"}</button></div>
     <div class="meta" style="margin-top:10px"><span>★ ${repo.stargazers_count.toLocaleString()}</span><span>作者 ${esc(repo.owner.login)}</span><span>作成 ${fmtDate(repo.created_at)}</span><span>更新 ${fmtDate(repo.pushed_at)}</span></div>
   </div>
   <div class="card">
@@ -563,9 +600,12 @@ function renderDetail(){
       : `<div class="note">完成品（配布ファイル）はありません。</div>`}
     <div class="asset"><span class="ostag">ソース</span><span class="an">ソースコード一式（zip）<br><span class="note">※ ソースコードはVirusTotalでの事前チェックができません</span></span>
       <a class="btn sub" href="${esc(zipUrl)}" target="_blank" rel="noopener" id="zipBtn">ダウンロード</a></div>
-    <div class="note" style="margin-top:8px">iPhoneでは保存先に「iCloud Drive」を選ぶと、家のMacに自動で同期されます。</div>
+    <div class="note" style="margin-top:8px">iPhoneでは保存先に「iCloud Drive」を選ぶと、家のMacに自動で同期されます。<a href="#" id="helpLink">保存のしかた</a></div>
   </div>`;
   $("detail").querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>checkAndDownload(current.assets[+b.dataset.a]));
+  $("helpLink").onclick = e=>{ e.preventDefault(); openHelp(); };
+  $("starBtn").onclick = ()=>{ toggleFav(current); renderDetail(); };
+  markFavSeen(repo.full_name, rel?.tag_name);
   $("transBtn").onclick = async ()=>{
     $("transBtn").disabled = true; $("dJa").innerHTML = `<span class="spin"></span>`;
     try{
@@ -593,7 +633,9 @@ async function vtLookup(sha){
   if(r.status === 401 || r.status === 403) return {state:"badkey"};
   if(!r.ok) return {state:"error"};
   const j = await r.json(); const s = j.data?.attributes?.last_analysis_stats || {};
-  return {state:"ok", mal:s.malicious||0, sus:s.suspicious||0, total:(s.malicious||0)+(s.suspicious||0)+(s.undetected||0)+(s.harmless||0)};
+  const res = {state:"ok", mal:s.malicious||0, sus:s.suspicious||0, total:(s.malicious||0)+(s.suspicious||0)+(s.undetected||0)+(s.harmless||0)};
+  const cache = LS.get("vtCache",{}); cache[sha] = {mal:res.mal, sus:res.sus, total:res.total, at:Date.now()}; LS.set("vtCache", cache);
+  return res;
 }
 function recordDownload(a, verdict){
   const list = LS.get("downloads", []);
@@ -676,11 +718,171 @@ function updateAiMode(){
     gemAvailable() ? "方式：Gemini" : "方式：日英対応表（Geminiは今日の上限に達しました）";
 }
 
+/* ===== Phase 2: notices ===== */
+function jstDate(){ return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo"}).format(new Date()); }
+function notify(msg, lv="info"){
+  const list = LS.get("notices", []);
+  list.unshift({id:Date.now()+Math.random(), msg, lv, at:new Date().toISOString(), read:false});
+  LS.set("notices", list.slice(0,50)); renderNotices();
+}
+function renderNotices(){
+  const list = LS.get("notices", []); const unread = list.filter(n=>!n.read);
+  const c = $("bellCnt"); c.textContent = unread.length; c.classList.toggle("hidden", !unread.length);
+  $("notices").innerHTML = unread.slice(0,5).map(n=>`<div class="notice ${n.lv}"><span>${n.lv==="red"?"🔴":n.lv==="yellow"?"⬆":"ℹ"} ${esc(n.msg)}</span><button class="nx" data-n="${n.id}" title="確認した">✕</button></div>`).join("");
+  $("notices").querySelectorAll("[data-n]").forEach(b=>b.onclick=()=>{ const l=LS.get("notices",[]); const x=l.find(n=>String(n.id)===b.dataset.n); if(x) x.read=true; LS.set("notices",l); renderNotices(); });
+}
+function openNotices(){
+  const list = LS.get("notices", []);
+  const s = $("dlSheet"); $("dlModal").classList.add("on");
+  s.innerHTML = `<h2>🔔 お知らせ</h2>${list.length? list.map(n=>`<div class="notice ${n.lv}"><span>${esc(n.at.slice(0,16).replace("T"," "))}<br>${esc(n.msg)}</span></div>`).join("") : `<div class="note">お知らせはありません。</div>`}
+   <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn sub" id="nClear">すべて既読にする</button><button class="btn" id="nClose">閉じる</button></div>`;
+  $("nClose").onclick = ()=>$("dlModal").classList.remove("on");
+  $("nClear").onclick = ()=>{ LS.set("notices", list.map(n=>Object.assign(n,{read:true}))); renderNotices(); $("dlModal").classList.remove("on"); };
+}
+
+/* ===== Phase 2: favorites ===== */
+const favs = () => LS.get("favs", []);
+const isFav = full => favs().some(f=>f.full===full);
+function assetsForRecheck(assets){
+  return (assets||[]).filter(a=>a.digest && a._os!=="other").sort((a,b)=>(a._os==="mac"?0:1)-(b._os==="mac"?0:1)).slice(0,3)
+    .map(a=>({name:a.name, sha:a.digest.replace(/^sha256:/,""), os:a._os}));
+}
+function toggleFav(cur){
+  let l = favs(); const full = cur.repo.full_name;
+  if(l.some(f=>f.full===full)) l = l.filter(f=>f.full!==full);
+  else l.unshift({full, desc:cur.repo.description||"", tag:cur.rel?.tag_name||"", newTag:"", assets:assetsForRecheck(cur.assets), addedAt:new Date().toISOString(), lastCheck:0});
+  LS.set("favs", l); renderFavs();
+}
+function markFavSeen(full, tag){
+  const l = favs(); const f = l.find(x=>x.full===full); if(!f) return;
+  if(tag && f.newTag){ f.tag = tag; f.newTag = ""; LS.set("favs", l); renderFavs(); }
+}
+function vtBadge(sha){
+  const c = LS.get("vtCache",{})[sha]; if(!c) return `<span class="badge b-gray">未確認</span>`;
+  if(c.mal>=3) return `<span class="badge b-red">危険 ${c.mal}/${c.total}</span>`;
+  if(c.mal>=1||c.sus>=2) return `<span class="badge b-yellow">注意 ${c.mal+c.sus}/${c.total}</span>`;
+  return `<span class="badge b-green">検出なし</span>`;
+}
+function renderFavs(){
+  const l = favs();
+  $("favList").innerHTML = l.length ? l.map((f,i)=>`<div class="fav">
+     <a href="#" class="rname" data-f="${i}">${esc(f.full)}</a> ${f.newTag?`<span class="newtag">新しい版 ${esc(f.newTag)}</span>`:""}
+     <div class="note">${esc(f.desc||"")}</div>
+     <div class="meta">今の版 ${esc(f.tag||"なし")}${(f.assets||[]).map(a=>` ・ ${esc(a.name)} ${vtBadge(a.sha)}`).join("")}</div></div>`).join("")
+    : `<div class="note">まだありません。アプリの詳細画面の「☆ お気に入りに追加」で登録できます。</div>`;
+  $("favList").querySelectorAll("[data-f]").forEach(a=>a.onclick=e=>{ e.preventDefault(); const [o,n]=l[+a.dataset.f].full.split("/"); openRepo(o,n); });
+  const d = LS.get("downloads", []);
+  $("dlList").innerHTML = d.length ? d.slice(0,30).map(x=>`<div class="fav"><span class="rname">${esc(x.name)}</span>
+     <div class="meta"><span>${esc(x.repo)}</span><span>${esc((x.at||"").slice(0,10))}</span>${x.sha?vtBadge(x.sha.replace(/^sha256:/,"")):`<span class="badge b-gray">指紋なし</span>`}</div></div>`).join("")
+    : `<div class="note">まだありません。</div>`;
+}
+
+/* Check favorites for new releases (on launch, at most once per hour unless forced) */
+async function checkFavUpdates(force){
+  const l = favs(); if(!l.length) return 0;
+  const last = LS.get("favLastCheck", 0);
+  if(!force && Date.now()-last < 3600000) return 0;
+  LS.set("favLastCheck", Date.now());
+  let found = 0;
+  for(const f of l){
+    try{
+      const [o,n] = f.full.split("/");
+      const rels = await gh(`/repos/${o}/${n}/releases?per_page=3`);
+      const rel = (rels||[]).find(r=>!r.draft); if(!rel) continue;
+      const assets = (rel.assets||[]).map(a=>Object.assign(a,{_os:assetOS(a.name)}));
+      if(rel.tag_name && f.tag && rel.tag_name !== f.tag && rel.tag_name !== f.newTag){
+        f.newTag = rel.tag_name; found++;
+        notify(`${f.full} に新しい版 ${rel.tag_name} が出ました`, "yellow");
+      }
+      if(!f.tag) f.tag = rel.tag_name || "";
+      const fresh = assetsForRecheck(assets); if(fresh.length) f.assets = fresh;
+      f.lastCheck = Date.now();
+    }catch(e){ $("favStatus").textContent = e.message; break; }
+  }
+  LS.set("favs", l); renderFavs();
+  return found;
+}
+
+/* Daily virus re-check (once per day in Japan time, or forced) */
+let recheckRunning = false;
+async function dailyRecheck(force){
+  if(recheckRunning) return;
+  if(!cfg().vtKey){ $("favStatus").textContent = "VirusTotal APIキーを設定すると、毎日ウイルスの再確認ができます。"; return; }
+  if(!force && LS.get("recheckDay","") === jstDate()) return;
+  const targets = new Map();
+  for(const d of LS.get("downloads", [])) if(d.sha) targets.set(d.sha.replace(/^sha256:/,""), d.name);
+  for(const f of favs()) for(const a of (f.assets||[])) if(!targets.has(a.sha)) targets.set(a.sha, a.name);
+  const list = [...targets.entries()].slice(0, 20);
+  if(!list.length){ LS.set("recheckDay", jstDate()); return; }
+  recheckRunning = true;
+  const cacheBefore = LS.get("vtCache",{});
+  let i = 0, red = 0;
+  for(const [sha, name] of list){
+    i++; $("favStatus").textContent = `ウイルスの再確認中 ${i}/${list.length}（1分に4件ずつ）…`;
+    const prev = cacheBefore[sha];
+    const v = await vtLookup(sha);
+    if(v.state==="blocked"){ $("favStatus").textContent = "ブラウザからVirusTotalに直接つなげないため、自動の再確認はできませんでした。"; recheckRunning=false; return; }
+    if(v.state==="limit"){ $("favStatus").textContent = "VirusTotalの今日の上限に達したため、残りは明日確認します。"; break; }
+    if(v.state==="ok" && v.mal>=3 && !(prev && prev.mal>=3)){ red++; notify(`${name} に危険が見つかりました（${v.mal}/${v.total}のソフトが検出）。開かずに削除してください。`, "red"); }
+    renderFavs();
+  }
+  LS.set("recheckDay", jstDate()); recheckRunning = false;
+  $("favStatus").textContent = `ウイルスの再確認が終わりました（${list.length}件${red?`、危険 ${red}件`:"、新たな危険なし"}）。最終確認：${jstDate()}`;
+}
+
+/* Danger-sign list: refreshed from danger.json on the same site at launch */
+async function loadDangerList(){
+  const cached = LS.get("dangerList", null); if(cached) applyDangerList(cached);
+  if(location.protocol === "file:") return;
+  try{
+    const r = await fetch("danger.json?t="+Date.now(), {cache:"no-store"}); if(!r.ok) return;
+    const j = await r.json(); applyDangerList(j); LS.set("dangerList", j);
+  }catch(e){}
+}
+
+/* Export / import (share between Mac and iPhone via iCloud Drive) */
+function exportData(){
+  const data = {app:"git-getter", type:"favorites", version:APP_VERSION, exportedAt:new Date().toISOString(), favs:favs(), downloads:LS.get("downloads",[])};
+  const blob = new Blob([JSON.stringify(data,null,1)], {type:"application/json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `gitgetter-favorites-${jstDate()}.json`;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+async function importData(file){
+  try{
+    const j = JSON.parse(await file.text());
+    if(j.app !== "git-getter" || !Array.isArray(j.favs)) throw 0;
+    const l = favs(); let addF = 0;
+    for(const f of j.favs){ if(f.full && !l.some(x=>x.full===f.full)){ l.push(f); addF++; } }
+    LS.set("favs", l);
+    const d = LS.get("downloads", []); let addD = 0;
+    for(const x of (j.downloads||[])){ if(!d.some(y=>y.name===x.name && y.sha===x.sha)){ d.push(x); addD++; } }
+    d.sort((a,b)=>(b.at||"").localeCompare(a.at||"")); LS.set("downloads", d.slice(0,300));
+    renderFavs(); $("favStatus").textContent = `読み込みました（お気に入り ${addF}件、履歴 ${addD}件を追加）。`;
+  }catch(e){ $("favStatus").textContent = "このファイルは読み込めませんでした（Git Getterで書き出したファイルを選んでください）。"; }
+}
+function openHelp(){
+  const s = $("dlSheet"); $("dlModal").classList.add("on");
+  s.innerHTML = `<h2>iPhoneでの保存のしかた</h2>
+   <h3>ダウンロードしたファイルをMacに送る</h3>
+   <ol class="steps"><li>「ダウンロード」を押すと、Safariが「ダウンロードしますか？」と聞くので「ダウンロード」を押す</li>
+   <li>画面右上（または下）の「↓」マークから、ダウンロードしたファイルを長押しする</li>
+   <li>「移動」→「iCloud Drive」→ 好きなフォルダを選んで「移動」</li>
+   <li>家のMacでFinderを開き、左の「iCloud Drive」から同じフォルダを開く</li></ol>
+   <div class="note">毎回iCloud Driveに保存したいときは、iPhoneの「設定」→「アプリ」→「Safari」→「ダウンロード」で保存先を「iCloud Drive」にできます。</div>
+   <h3>お気に入りを共有する</h3>
+   <ol class="steps"><li>片方の端末で「⭐ お気に入り」→「書き出す」</li><li>保存先に「iCloud Drive」を選ぶ</li><li>もう一方の端末で「読み込む」→ そのファイルを選ぶ</li></ol>
+   <div class="note">Mac用のアプリはiPhoneでは動きません。Macに移してから、ウイルスチェックをして開いてください。</div>
+   <div class="row" style="justify-content:flex-end"><button class="btn" id="hClose">閉じる</button></div>`;
+  $("hClose").onclick = ()=>$("dlModal").classList.remove("on");
+}
+
 /* ===== Wire up ===== */
 $("verLabel").textContent = "v" + APP_VERSION; $("verFoot").textContent = "v" + APP_VERSION;
 $("tabs").querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
   $("tabs").querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===t));
   document.querySelectorAll("[data-p]").forEach(p=>p.classList.toggle("hidden", p.dataset.p!==t.dataset.t));
+  $("filtersBox").classList.toggle("hidden", t.dataset.t==="fav");
+  if(t.dataset.t==="fav"){ $("resultsCard").classList.add("hidden"); renderFavs(); }
 });
 $("genres").innerHTML = GENRES.map((g,i)=>`<button class="genre" data-g="${i}">${esc(g[0])}</button>`).join("");
 $("genres").querySelectorAll(".genre").forEach(b=>b.onclick=()=>{ const g=GENRES[+b.dataset.g]; runSearch([g[1]], `ジャンル「${g[0]}」`); });
@@ -699,7 +901,14 @@ $("backBtn").onclick = showSearch;
 $("setBtn").onclick = openSettings; $("setCancel").onclick = ()=>$("setModal").classList.remove("on"); $("setSave").onclick = saveSettings;
 $("chkUpd").onclick = ()=>checkUpdate(true);
 [$("setModal"),$("dlModal")].forEach(m=>m.addEventListener("click",e=>{ if(e.target===m) m.classList.remove("on"); }));
-renderUsage(); updateAiMode(); checkUpdate(false);
+$("bellBtn").onclick = openNotices;
+$("favCheck").onclick = async ()=>{ $("favCheck").disabled=true; $("favStatus").textContent="新しい版を確認中…"; const n = await checkFavUpdates(true); $("favStatus").textContent = n?`新しい版が${n}件見つかりました。`:"新しい版はありませんでした。"; await dailyRecheck(true); $("favCheck").disabled=false; };
+$("expBtn").onclick = exportData;
+$("impFile").onchange = e=>{ const f=e.target.files[0]; if(f) importData(f); e.target.value=""; };
+$("helpBtn").onclick = openHelp;
+renderUsage(); updateAiMode(); checkUpdate(false); renderNotices(); renderFavs();
+loadDangerList();
+(async ()=>{ await checkFavUpdates(false); await dailyRecheck(false); })();
 </script>
 </body>
 </html>
