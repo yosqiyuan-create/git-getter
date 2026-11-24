@@ -6,7 +6,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.1.0">
+<meta name="app-version" content="1.1.1">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
 <title>Git Getter</title>
 <style>
 :root{--bg:#f4f6fa;--card:#fff;--ink:#1c2333;--sub:#5b6478;--line:#dde2ec;--brand:#1f3864;--accent:#2e6be6;
@@ -14,7 +17,12 @@
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Meiryo",sans-serif;background:var(--bg);color:var(--ink);font-size:16px;line-height:1.55}
 header{background:var(--brand);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;position:sticky;top:0;z-index:20;box-shadow:0 2px 6px rgba(0,0,0,.15)}
-.hrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hrow{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;white-space:nowrap}
+.hrow2{display:flex;align-items:center;gap:6px;margin-top:8px}
+.hrow2 .usage{margin-top:0}
+.appicon{width:28px;height:28px;border-radius:7px}
+.updbtn{padding:2px 8px;font-size:12px;flex-shrink:0}
+@media(max-width:380px){.by{font-size:11px}.appname{font-size:18px}}
 .appname{font-size:20px;font-weight:700;letter-spacing:.3px}
 .by{font-size:13px;opacity:.85}
 .ver{font-size:12px;background:rgba(255,255,255,.18);padding:1px 8px;border-radius:10px}
@@ -83,22 +91,22 @@ h2{font-size:18px;margin:0 0 8px}h3{font-size:15px;margin:14px 0 6px}
 ol.steps{padding-left:22px;font-size:15px}ol.steps li{margin:4px 0}
 footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 </style>
-
-<link rel="apple-touch-icon" href="gitup-icon.png">
-<link rel="manifest" href="manifest.json">
 </head>
 <body>
 <header>
   <div class="hrow">
+    <img src="icon-192.png" alt="" class="appicon" onerror="this.remove()">
     <span class="appname">Git Getter</span>
     <span class="by">by Urushihara</span>
     <span class="ver" id="verLabel"></span>
-    <span class="spacer"></span>
     <button class="hbtn updbtn hidden" id="updBtn"></button>
+  </div>
+  <div class="hrow2">
+    <div class="usage" id="usage"></div>
+    <span class="spacer"></span>
     <button class="hbtn bell" id="bellBtn">🔔<b id="bellCnt" class="hidden"></b></button>
     <button class="hbtn" id="setBtn">⚙ 設定</button>
   </div>
-  <div class="usage" id="usage"></div>
 </header>
 
 <main>
@@ -212,7 +220,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.1.1";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -690,7 +698,7 @@ async function checkUpdate(manual){
     if(!r.ok) throw 0;
     const j = await r.json();
     if(j.version && newer(j.version, APP_VERSION)){
-      const b = $("updBtn"); b.textContent = `⬆ v${j.version} に更新`; b.classList.remove("hidden");
+      const b = $("updBtn"); b.textContent = `⬆ v${j.version}`; b.title = "バージョンアップ"; b.classList.remove("hidden");
       b.title = j.notes || "";
       b.onclick = ()=>{ if(confirm(`新しいバージョン v${j.version} に更新します。\n${j.notes||""}`)) location.replace(location.pathname + "?v=" + encodeURIComponent(j.version) + "&t=" + Date.now()); };
       if(manual) $("updMsg").textContent = `v${j.version} があります（上の黄色いボタンで更新）`;
