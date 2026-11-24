@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.1.1">
+<meta name="app-version" content="1.2.0">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -220,7 +220,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.1.1";
+const APP_VERSION = "1.2.0";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -460,6 +460,110 @@ function portJa(lang, macAsset){
   return ["gray",`言語：${lang}`];
 }
 
+function langShare(langs){
+  const tot = Object.values(langs||{}).reduce((a,b)=>a+b,0); if(!tot) return "";
+  return Object.entries(langs).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>`${k} ${Math.round(v*100/tot)}%`).join("・");
+}
+function portJa2(langs, mainLang, macAsset){
+  if(macAsset) return ["green","Mac版あり（そのまま使える）"];
+  const tot = Object.values(langs||{}).reduce((a,b)=>a+b,0);
+  if(!tot) return portJa(mainLang, false);
+  const share = re => Object.entries(langs).filter(([k])=>re.test(k)).reduce((a,[,v])=>a+v,0)/tot;
+  const hard = share(/^(C#|C\+\+|C|Visual Basic( \.NET)?|Pascal|Delphi|AutoHotkey|PowerShell|Batchfile|NSIS|Inno Setup)$/);
+  const mac  = share(/^(Swift|Objective-C|Objective-C\+\+)$/);
+  const easy = share(/^(Python|JavaScript|TypeScript|Java|Go|Rust|Kotlin|Ruby|PHP|Dart|HTML|CSS|Shell|Lua|Vue|Svelte|SCSS)$/);
+  if(mac >= 0.4) return ["green", "Mac向けの言語で作られている"];
+  if(easy >= 0.6) return ["green", "Mac移植：簡単（Macでも動きやすい言語が中心）"];
+  if(hard >= 0.5) return ["yellow", "Mac移植：大変（Windows向けの言語が中心）→ 作り直しがおすすめ"];
+  return ["yellow", "Mac移植：やや大変（いろいろな言語が混ざっている）"];
+}
+
+/* ===== Remake request memo (English prompt to paste into Claude) ===== */
+function readmeImages(md, full, branch){
+  const out = []; const re = /!\[[^\]]*\]\(([^)\s]+)[^)]*\)|<img[^>]+src=["']([^"']+)["']/gi; let m;
+  while((m = re.exec(md||"")) && out.length < 5){
+    let u = m[1] || m[2]; if(!u || /shields\.io|badge|travis|codecov|\.svg(\?|$)/i.test(u)) continue;
+    if(!/^https?:/i.test(u)) u = `https://raw.githubusercontent.com/${full}/${branch}/${u.replace(/^\.?\//,"")}`;
+    if(!out.includes(u)) out.push(u);
+  }
+  return out;
+}
+function readmeExcerpt(md){
+  return (md||"").replace(/```[\s\S]*?```/g,"").replace(/<[^>]+>/g,"").replace(/!\[[^\]]*\]\([^)]*\)/g,"")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g,"$1").replace(/\n{3,}/g,"\n\n").trim().slice(0,2500);
+}
+const TARGETS = {
+  web: ["iPhoneとMacで使えるWebアプリ", "A web app (a single index.html) that works in Safari on iPhone and on Mac."],
+  mac: ["Macアプリ", "A Mac app for my Mac mini (Apple silicon M2, 16GB). Give me a paste-and-run setup script that needs no manual configuration."],
+  both:["Webアプリ＋Mac補助", "A web app for iPhone and Mac, plus a small Mac helper only for the parts a browser cannot do."]
+};
+function buildRemakeMemo(opt){
+  const {repo, rel, readme, langs} = current;
+  const [ , lt] = licenseJa(repo.license);
+  const imgs = readmeImages(readme, repo.full_name, repo.default_branch);
+  const what = opt.features || readmeExcerpt(readme) || "(No README. Please look at the repository.)";
+  const L = [];
+  L.push("Please build a new app that works like the GitHub project below.");
+  L.push("Do NOT copy its source code, name, logo, icons or images. Recreate the behavior from scratch with original code and an original design.");
+  L.push("");
+  L.push("[Reference project]");
+  L.push(`- Repository: ${repo.html_url}`);
+  L.push(`- Description: ${repo.description||"(none)"}`);
+  L.push(`- Languages: ${langShare(langs) || repo.language || "unknown"}`);
+  L.push(`- License: ${repo.license?.spdx_id || "none"}`);
+  if(repo.topics?.length) L.push(`- Topics: ${repo.topics.join(", ")}`);
+  if(rel?.tag_name) L.push(`- Latest release: ${rel.tag_name}`);
+  L.push("");
+  L.push(opt.features ? "[What it does (summary)]" : "[What it does (README excerpt)]");
+  L.push(what);
+  if(imgs.length){ L.push(""); L.push("[Screenshots of the original (reference only, do not reuse)]"); imgs.forEach(u=>L.push("- "+u)); }
+  L.push("");
+  L.push("[What I want]");
+  L.push(`- Target: ${TARGETS[opt.target][1]}`);
+  L.push(`- New app name: ${opt.name ? opt.name : "Please suggest an original name that is not similar to the reference project."}`);
+  if(opt.extra) L.push(`- Extra requests (written in Japanese): ${opt.extra}`);
+  L.push("- All on-screen text must be in Japanese. I cannot read English.");
+  L.push("- It must be free to run. Do not use paid APIs (do not use the Claude API). Prefer free or local processing.");
+  if(opt.target !== "mac"){
+    L.push("- Deliver it as a zip I can upload with my GitUp app: index.html and version.json at the top level.");
+    L.push('- version.json format: {"id": "<repo-name>", "name": "<App Name>", "version": "1.0.0", "date": "YYYY-MM-DD", "notes": "<Japanese>"}');
+    L.push('- Show "<App Name> by Urushihara vX.Y.Z" in the header, with a version-up button right next to the version when version.json on the site is newer.');
+  }
+  L.push("- Plan first: give me the plan as a .docx before writing any code, and wait for my OK.");
+  return L.join("\n");
+}
+function openRemake(){
+  const s = $("dlSheet"); $("dlModal").classList.add("on");
+  s.innerHTML = `<h2>🛠 作り直し依頼メモ</h2>
+   <div class="field"><label>何として作り直す？</label><select id="rmTarget">${Object.entries(TARGETS).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join("")}</select></div>
+   <div class="field"><label>新しいアプリの名前（空欄ならClaudeに考えてもらう）</label><input type="text" id="rmName" placeholder="例：Moji Okoshi"></div>
+   <div class="field"><label>追加でしてほしいこと（日本語でOK・空欄可）</label><input type="text" id="rmExtra" placeholder="例：ボタンを大きく、文字起こし結果を保存できるように"></div>
+   <div class="field"><label><input type="checkbox" id="rmSum" ${gemAvailable()?"checked":"disabled"}> Geminiで機能を短くまとめる（Geminiを1回使います）${gemAvailable()?"":"　※今は使えません"}</label></div>
+   <div class="row"><button class="btn" id="rmMake">メモを作る</button><span class="note" id="rmMsg"></span></div>
+   <textarea id="rmText" style="min-height:220px;margin-top:10px;font-size:13px" readonly placeholder="ここに依頼文（英語）が出ます"></textarea>
+   <div class="note">※ 元のコード・名前・ロゴ・画像は使わないよう、依頼文に自動で書き込んであります。</div>
+   <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn sub" id="rmClose">閉じる</button><button class="btn green" id="rmCopy" disabled>コピーする</button></div>`;
+  $("rmClose").onclick = ()=>$("dlModal").classList.remove("on");
+  $("rmMake").onclick = async ()=>{
+    const opt = {target:$("rmTarget").value, name:$("rmName").value.trim(), extra:$("rmExtra").value.trim(), features:""};
+    if($("rmSum").checked && gemAvailable()){
+      $("rmMsg").innerHTML = `<span class="spin"></span> Geminiがまとめています…`;
+      try{
+        const out = await gemini(`Summarize what this GitHub project does, for a developer who will rebuild similar behavior from scratch. Return only JSON: {"features": "an English bullet list (each line starts with '- '), 5 to 12 lines, describing user-facing features and how it works; no code"}.\nDescription: ${current.repo.description||""}\nREADME:\n${readmeExcerpt(current.readme).slice(0,6000)}`);
+        opt.features = String(out.features||"").trim();
+        $("rmMsg").textContent = "";
+      }catch(e){ $("rmMsg").textContent = "Geminiでまとめられなかったので、説明文の抜粋を使いました。"; }
+    }
+    $("rmText").value = buildRemakeMemo(opt); $("rmCopy").disabled = false;
+  };
+  $("rmCopy").onclick = async ()=>{
+    const t = $("rmText").value;
+    try{ await navigator.clipboard.writeText(t); }
+    catch(e){ const ta=$("rmText"); ta.removeAttribute("readonly"); ta.select(); document.execCommand("copy"); ta.setAttribute("readonly",""); }
+    $("rmCopy").textContent = "✓ コピーしました"; setTimeout(()=>{ if($("rmCopy")) $("rmCopy").textContent="コピーする"; }, 2000);
+  };
+}
+
 /* ===== Asset classification ===== */
 function assetOS(name){
   const n = name.toLowerCase();
@@ -563,17 +667,18 @@ async function openRepo(owner, name){
   try{
     const repo = await gh(`/repos/${owner}/${name}`);
     if(!repo){ $("detail").innerHTML = `<div class="msg err">見つかりませんでした。URLを確認してください。</div>`; return; }
-    const [rels, readme, user] = await Promise.all([
+    const [rels, readme, user, langs] = await Promise.all([
       gh(`/repos/${owner}/${name}/releases?per_page=5`).catch(()=>[]),
       gh(`/repos/${owner}/${name}/readme`, "application/vnd.github.raw").catch(()=>""),
-      gh(`/users/${repo.owner.login}`).catch(()=>null)
+      gh(`/users/${repo.owner.login}`).catch(()=>null),
+      gh(`/repos/${owner}/${name}/languages`).catch(()=>null)
     ]);
     const rel = (rels||[]).find(r=>!r.draft) || null;
     const assets = (rel?.assets||[]).map(a=>Object.assign(a,{_os:assetOS(a.name)}))
       .sort((a,b)=>(a._os==="mac"?0:a._os==="other"?2:1)-(b._os==="mac"?0:b._os==="other"?2:1));
     const downloads = assets.reduce((s,a)=>s+(a.download_count||0),0);
     const sc = scoreRepo(repo, {ownerCreated:user?.created_at, readme:readme||"", hasAssets:assets.length>0, downloads});
-    current = {repo, rel, assets, sc, readme};
+    current = {repo, rel, assets, sc, readme, langs: langs||{}};
     renderDetail();
   }catch(e){ $("detail").innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
 }
@@ -581,7 +686,8 @@ function renderDetail(){
   const {repo, rel, assets, sc} = current;
   const [ll,lt] = licenseJa(repo.license);
   const macAsset = assets.some(a=>a._os==="mac");
-  const [pl,pt] = portJa(repo.language, macAsset);
+  const [pl,pt] = portJa2(current.langs, repo.language, macAsset);
+  const langLine = langShare(current.langs);
   const flagIcon = {green:"🟢",yellow:"🟡",red:"🔴"};
   const zipUrl = `https://github.com/${repo.full_name}/archive/refs/heads/${encodeURIComponent(repo.default_branch)}.zip`;
   $("detail").innerHTML = `
@@ -599,6 +705,9 @@ function renderDetail(){
     <ul class="safety-list">${sc.flags.map(f=>`<li>${flagIcon[f[0]]} ${esc(f[1])}</li>`).join("")}</ul>
     <h3>ライセンス（改造・配布のルール）</h3><span class="badge b-${ll}">${esc(lt)}</span>
     <h3>Macで使えるか</h3><span class="badge b-${pl}">${esc(pt)}</span>
+    ${langLine?`<div class="note" style="margin-top:4px">使われている言語：${esc(langLine)}</div>`:""}
+    <div class="row" style="margin-top:10px"><button class="btn" id="remakeBtn">🛠 作り直し依頼メモを作る</button></div>
+    <div class="note" style="margin-top:4px">同じ動きのアプリを、MacやiPhone用に新しく作ってもらうための依頼文（英語）を作ります。Claudeに貼るだけで頼めます。</div>
   </div>
   <div class="card">
     <h3 style="margin-top:0">ダウンロード${rel?`（最新版 ${esc(rel.tag_name)}・${fmtDate(rel.published_at)}）`:""}</h3>
@@ -611,6 +720,7 @@ function renderDetail(){
     <div class="note" style="margin-top:8px">iPhoneでは保存先に「iCloud Drive」を選ぶと、家のMacに自動で同期されます。<a href="#" id="helpLink">保存のしかた</a></div>
   </div>`;
   $("detail").querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>checkAndDownload(current.assets[+b.dataset.a]));
+  $("remakeBtn").onclick = openRemake;
   $("helpLink").onclick = e=>{ e.preventDefault(); openHelp(); };
   $("starBtn").onclick = ()=>{ toggleFav(current); renderDetail(); };
   markFavSeen(repo.full_name, rel?.tag_name);
