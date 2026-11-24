@@ -1,4 +1,7 @@
 {
-  "version": "1.0.0",
-  "notes": "最初の版"
+ "id": "git-getter",
+ "name": "Git Getter",
+ "version": "1.0.0",
+ "date": "2026-11-25",
+ "notes": "最初の版"
 }
