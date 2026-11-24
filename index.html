@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Git Getter">
+<meta name="theme-color" content="#1f3864">
+<title>Git Getter</title>
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--ink:#1c2333;--sub:#5b6478;--line:#dde2ec;--brand:#1f3864;--accent:#2e6be6;
+--green:#1f9d55;--yellow:#d69e00;--red:#d63a3a;--greenbg:#e5f6ec;--yellowbg:#fff5d6;--redbg:#fde8e8;}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Meiryo",sans-serif;background:var(--bg);color:var(--ink);font-size:16px;line-height:1.55}
+header{background:var(--brand);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;position:sticky;top:0;z-index:20;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+.hrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.appname{font-size:20px;font-weight:700;letter-spacing:.3px}
+.by{font-size:13px;opacity:.85}
+.ver{font-size:12px;background:rgba(255,255,255,.18);padding:1px 8px;border-radius:10px}
+.spacer{flex:1}
+.hbtn{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:8px;padding:5px 10px;font-size:14px;cursor:pointer}
+.updbtn{background:#ffcc33;color:#3a2a00;border:none;font-weight:700;animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,204,51,.7)}50%{box-shadow:0 0 0 6px rgba(255,204,51,0)}}
+.usage{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chip{font-size:11.5px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.15);white-space:nowrap}
+.chip.warn{background:#ffcc33;color:#3a2a00}.chip.over{background:#ff6b6b;color:#fff}
+main{max-width:860px;margin:0 auto;padding:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.tabs{display:flex;gap:4px;overflow-x:auto;margin-bottom:10px;-webkit-overflow-scrolling:touch}
+.tab{flex:0 0 auto;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:14px;color:var(--sub)}
+.tab.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+textarea,input[type=text],input[type=password],input[type=number],select{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:16px;font-family:inherit;background:#fff}
+textarea{min-height:76px;resize:vertical}
+.btn{display:inline-block;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:15px;cursor:pointer;font-family:inherit;text-decoration:none;text-align:center}
+.btn.sub{background:#e9edf5;color:var(--ink)}.btn.red{background:var(--red)}.btn.green{background:var(--green)}
+.btn:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.genres{display:flex;flex-wrap:wrap;gap:6px}
+.genre{padding:8px 12px;border-radius:18px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:14px}
+.genre:hover{border-color:var(--accent)}
+.filters{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:14px;color:var(--sub)}
+.filters label{display:flex;align-items:center;gap:4px}
+.note{font-size:13px;color:var(--sub)}
+.mode{font-size:12px;color:var(--sub);margin-top:6px}
+.result{display:block;padding:12px;border-bottom:1px solid var(--line);cursor:pointer}
+.result:last-child{border-bottom:none}
+.result:hover{background:#f8faff}
+.rname{font-weight:700;color:var(--accent);word-break:break-all}
+.rdesc{font-size:14px;color:var(--ink);margin:3px 0}
+.rja{font-size:14px;color:#0b5c2c;background:#eef8f1;border-radius:6px;padding:2px 6px;margin:3px 0;display:inline-block}
+.meta{font-size:12.5px;color:var(--sub);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.badge{display:inline-block;font-size:12px;padding:1px 8px;border-radius:10px;font-weight:700}
+.b-green{background:var(--greenbg);color:var(--green)}.b-yellow{background:var(--yellowbg);color:#8a6500}.b-red{background:var(--redbg);color:var(--red)}.b-gray{background:#eceff4;color:var(--sub)}
+.msg{padding:10px 12px;border-radius:8px;font-size:14px;margin:8px 0}
+.msg.info{background:#e8f0fe}.msg.warn{background:var(--yellowbg)}.msg.err{background:var(--redbg)}
+.safety-list{margin:6px 0 0;padding-left:20px;font-size:14px}
+.safety-list li{margin:2px 0}
+.asset{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px dashed var(--line);flex-wrap:wrap}
+.asset .an{flex:1;min-width:160px;word-break:break-all;font-size:14px}
+.ostag{font-size:11px;padding:1px 6px;border-radius:6px;background:#eceff4;color:var(--sub)}
+.ostag.mac{background:#1f3864;color:#fff}
+h2{font-size:18px;margin:0 0 8px}h3{font-size:15px;margin:14px 0 6px}
+.back{background:none;border:none;color:var(--accent);font-size:15px;cursor:pointer;padding:0;margin-bottom:8px}
+.modal{position:fixed;inset:0;background:rgba(10,15,30,.55);display:none;align-items:flex-end;justify-content:center;z-index:50}
+.modal.on{display:flex}
+.sheet{background:#fff;width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+@media(min-width:700px){.modal{align-items:center}.sheet{border-radius:16px}}
+.field{margin-bottom:12px}.field label{display:block;font-size:13px;color:var(--sub);margin-bottom:3px}
+.vt-big{font-size:22px;font-weight:700;text-align:center;padding:14px;border-radius:10px;margin:10px 0}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid #ccd;border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+.hidden{display:none!important}
+footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
+</style>
+
+<link rel="apple-touch-icon" href="gitup-icon.png">
+<link rel="manifest" href="manifest.json">
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <span class="appname">Git Getter</span>
+    <span class="by">by Urushihara</span>
+    <span class="ver" id="verLabel"></span>
+    <span class="spacer"></span>
+    <button class="hbtn updbtn hidden" id="updBtn"></button>
+    <button class="hbtn" id="setBtn">⚙ 設定</button>
+  </div>
+  <div class="usage" id="usage"></div>
+</header>
+
+<main>
+  <!-- Search view -->
+  <section id="searchView">
+    <div class="card">
+      <div class="tabs" id="tabs">
+        <button class="tab on" data-t="ai">💬 言葉で頼む</button>
+        <button class="tab" data-t="genre">🏷 ジャンル</button>
+        <button class="tab" data-t="kw">🔎 キーワード</button>
+        <button class="tab" data-t="rank">🏆 ランキング</button>
+        <button class="tab" data-t="url">🔗 URL</button>
+      </div>
+
+      <div data-p="ai">
+        <textarea id="aiText" placeholder="例：動画から文字起こしができるMacのアプリが欲しい"></textarea>
+        <div class="row" style="margin-top:8px"><button class="btn" id="aiGo">探す</button></div>
+        <div class="note" style="margin-top:6px">※ 書いた文章はGoogleの製品改善に使われることがあります。個人情報は書かないでください。</div>
+        <div class="mode" id="aiMode"></div>
+      </div>
+
+      <div data-p="genre" class="hidden">
+        <div class="genres" id="genres"></div>
+      </div>
+
+      <div data-p="kw" class="hidden">
+        <div class="row"><input type="text" id="kwText" placeholder="例：動画 変換" style="flex:1"><button class="btn" id="kwGo">検索</button></div>
+        <div class="note" style="margin-top:6px">日本語は対応表で英語に置き換えて検索します。英語もそのまま使えます。</div>
+      </div>
+
+      <div data-p="rank" class="hidden">
+        <div class="row">
+          <button class="btn" id="rankNew">最近人気が出ているもの</button>
+          <button class="btn sub" id="rankAll">ずっと人気のもの</button>
+        </div>
+      </div>
+
+      <div data-p="url" class="hidden">
+        <div class="row"><input type="text" id="urlText" placeholder="https://github.com/作者/アプリ名" style="flex:1"><button class="btn" id="urlGo">開く</button></div>
+      </div>
+
+      <div class="filters">
+        <label><input type="checkbox" id="fMac"> Mac向けだけ</label>
+        <label><input type="checkbox" id="fData"> データ集だけ</label>
+        <label><input type="checkbox" id="fRecent"> 1年以内に更新</label>
+        <label><input type="checkbox" id="fGreen"> 安全度が緑だけ</label>
+        <label>並べ替え
+          <select id="fSort" style="width:auto;padding:4px 6px;font-size:14px">
+            <option value="stars">人気順</option><option value="updated">更新日順</option>
+          </select></label>
+      </div>
+    </div>
+
+    <div id="status"></div>
+    <div class="card hidden" id="resultsCard" style="padding:0"><div id="results"></div></div>
+  </section>
+
+  <!-- Detail view -->
+  <section id="detailView" class="hidden">
+    <button class="back" id="backBtn">← 一覧にもどる</button>
+    <div id="detail"></div>
+  </section>
+</main>
+<footer>Git Getter by Urushihara <span id="verFoot"></span></footer>
+
+<!-- Settings -->
+<div class="modal" id="setModal"><div class="sheet">
+  <h2>⚙ 設定</h2>
+  <div class="note" style="margin-bottom:10px">キーはこの端末の中だけに保存されます（プログラムには書き込まれません）。</div>
+  <h3>Gemini（言葉で頼んで探す・日本語訳）</h3>
+  <div class="field"><label>Gemini APIキー（無料・Google AI Studioで取得）</label><input type="password" id="sGemKey" autocomplete="off"></div>
+  <div class="field"><label>モデル名（空欄なら自動で選びます）</label><input type="text" id="sGemModel" placeholder="自動"></div>
+  <div class="field"><label>1日の上限回数（Google AI Studioで確認した数字）</label><input type="number" id="sGemLimit" min="1"></div>
+  <div class="field"><label>この端末で使う割合（%）MacとiPhoneで分けるとき用。例：50</label><input type="number" id="sGemShare" min="1" max="100"></div>
+  <div class="field"><label><input type="checkbox" id="sTrans"> 検索結果の説明文を自動で日本語に訳す（1回の検索でGeminiを1回多く使います）</label></div>
+  <h3>VirusTotal（ダウンロード前のウイルスチェック）</h3>
+  <div class="field"><label>VirusTotal APIキー（無料・個人利用のみ）</label><input type="password" id="sVtKey" autocomplete="off"></div>
+  <h3>GitHub</h3>
+  <div class="field"><label>GitHubトークン（任意・入れると回数制限が増えます）</label><input type="password" id="sGhToken" autocomplete="off"></div>
+  <h3>警告</h3>
+  <div class="field"><label>何%使ったら警告を出すか</label><input type="number" id="sWarn" min="10" max="100"></div>
+  <h3>アプリの更新</h3>
+  <div class="row"><button class="btn sub" id="chkUpd">新しいバージョンを確認</button><span class="note" id="updMsg"></span></div>
+  <div class="row" style="margin-top:18px;justify-content:flex-end">
+    <button class="btn sub" id="setCancel">閉じる</button><button class="btn" id="setSave">保存</button>
+  </div>
+</div></div>
+
+<!-- Download check -->
+<div class="modal" id="dlModal"><div class="sheet" id="dlSheet"></div></div>
+
+<script>
+"use strict";
+/* ===== App version (change this and version.json together when releasing) ===== */
+const APP_VERSION = "1.0.0";
+
+/* ===== Storage helpers ===== */
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem("gg_"+k); return v===null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem("gg_"+k, JSON.stringify(v)); }catch(e){} }
+};
+const cfg = () => Object.assign({gemKey:"",gemModel:"",gemLimit:200,gemShare:100,trans:true,vtKey:"",ghToken:"",warn:80}, LS.get("cfg",{}));
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtDate = s => s ? s.slice(0,10) : "-";
+const daysSince = s => (Date.now() - new Date(s).getTime()) / 86400000;
+
+/* ===== Japanese <-> English dictionary ===== */
+const DICT = [
+ ["動画編集","video editor"],["動画ダウンロード","video downloader"],["動画変換","video converter"],["動画","video"],
+ ["文字起こし","transcription"],["字幕","subtitle"],["音声認識","speech recognition"],["音声合成","text to speech"],["読み上げ","text to speech"],
+ ["音声","audio"],["音楽","music"],["録音","audio recorder"],["ノイズ除去","noise reduction"],
+ ["画像編集","image editor"],["画像変換","image converter"],["画像生成","image generation"],["画像","image"],["写真","photo"],["イラスト","drawing"],["背景除去","background removal"],
+ ["画面録画","screen recorder"],["スクリーンショット","screenshot"],["画面","screen"],
+ ["pdf","pdf"],["電子書籍","ebook"],["本","book"],["ocr","ocr"],["文字認識","ocr"],
+ ["翻訳","translation"],["メモ","notes"],["日記","journal"],["タスク","todo"],["カレンダー","calendar"],
+ ["ダウンロード","downloader"],["変換","converter"],["圧縮","compression"],["解凍","archive"],["バックアップ","backup"],["同期","sync"],
+ ["ファイル整理","file organizer"],["ファイル","file"],["フォルダ","folder"],["検索","search"],
+ ["自動化","automation"],["スクレイピング","scraper"],["ブラウザ","browser"],["拡張機能","extension"],
+ ["ゲーム","game"],["エミュレーター","emulator"],["パズル","puzzle"],
+ ["データ集","dataset"],["データ","dataset"],["株","stock"],["為替","forex"],["天気","weather"],["地図","map"],
+ ["ai","ai"],["人工知能","ai"],["チャット","chat"],["チャットボット","chatbot"],["ローカル","local"],
+ ["メニューバー","menu bar"],["ウィンドウ","window manager"],["キーボード","keyboard"],["クリップボード","clipboard"],["ランチャー","launcher"],
+ ["セキュリティ","security"],["パスワード管理","password manager"],["ウイルス","antivirus"],["広告ブロック","ad blocker"],
+ ["マック","macos"],["mac","macos"],["アイフォン","ios"],["iphone","ios"],["ウィンドウズ","windows"],
+ ["アニメ","animation"],["アニメーション","animation"],["3d","3d"],["フォント","font"],["配信","streaming"],["obs","obs"],
+ ["ギター","guitar"],["楽譜","sheet music"],["ピアノ","piano"],["英語学習","english learning"],["学習","learning"],["辞書","dictionary"],
+ ["睡眠","sleep"],["健康","health"],["家計簿","budget"],["お金","finance"],["レシピ","recipe"],
+ ["便利","utility"],["ツール","tool"],["アプリ","app"],["無料","free"],["軽い","lightweight"]
+];
+const DICT_SORTED = [...DICT].sort((a,b)=>b[0].length-a[0].length);
+function jaToEn(text){
+  let t = text.toLowerCase(); const out = [];
+  for(const [ja,en] of DICT_SORTED){ if(t.includes(ja)){ out.push(en); t = t.split(ja).join(" "); } }
+  const rest = t.replace(/[^\x20-\x7e]/g," ").trim();   // keep any English words the user typed
+  if(rest) out.push(rest);
+  return [...new Set(out)].join(" ").trim();
+}
+const EN_HINT = (() => { const m=new Map(); for(const [ja,en] of DICT){ if(!m.has(en)) m.set(en,ja); } return m; })();
+function enHint(desc){
+  if(!desc) return ""; const d = desc.toLowerCase(); const found=[];
+  for(const [en,ja] of EN_HINT){ if(en.length>2 && d.includes(en) && !found.includes(ja)) found.push(ja); if(found.length>=5) break; }
+  return found.join("・");
+}
+
+const GENRES = [
+ ["動画編集","video editor"],["動画ダウンロード","video downloader"],["文字起こし","speech to text transcription"],["画像編集","image editor"],
+ ["画像生成AI","stable diffusion"],["PDF","pdf tool"],["音声・音楽","audio editor"],["翻訳","translation app"],["画面録画","screen recorder"],
+ ["スクリーンショット","screenshot tool"],["OCR（文字認識）","ocr"],["電子書籍","ebook reader"],["メモ","note taking app"],["自動化","automation tool"],
+ ["ローカルAI","local llm"],["Mac便利ツール","macos menu bar utility"],["ファイル整理","file organizer"],["ゲーム","open source game"],["データ集","dataset"]
+];
+
+/* ===== Usage counters ===== */
+function laDate(){ return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Los_Angeles"}).format(new Date()); }
+function utcDate(){ return new Date().toISOString().slice(0,10); }
+function counter(name, dayFn){
+  const day = typeof dayFn === "function" ? dayFn() : dayFn;
+  const c = LS.get("cnt_"+name, {day:"",n:0});
+  if(c.day !== day){ c.day = day; c.n = 0; LS.set("cnt_"+name, c); }
+  return c;
+}
+function bump(name, dayFn){ const c = counter(name, dayFn); c.n++; LS.set("cnt_"+name, c); renderUsage(); return c.n; }
+const gemLimitEff = () => { const c=cfg(); return Math.max(1, Math.floor(c.gemLimit * c.gemShare / 100)); };
+const VT_DAY = 500, VT_MIN = 4;
+let ghRate = { core:null, search:null };
+let gemBlockedUntilDay = LS.get("gemBlocked","");
+
+function level(used, limit){ const w=cfg().warn/100; if(used>=limit) return "over"; if(used>=limit*w) return "warn"; return ""; }
+function renderUsage(){
+  const c = cfg(); const chips = [];
+  if(c.gemKey){
+    const g = counter("gem", laDate()).n, L = gemLimitEff();
+    const lv = gemBlockedUntilDay===laDate() ? "over" : level(g,L);
+    chips.push(`<span class="chip ${lv}">Gemini ${g}/${L}${lv==="over"?" 上限":""}</span>`);
+  }
+  if(c.vtKey){
+    const v = counter("vt", utcDate()).n;
+    chips.push(`<span class="chip ${level(v,VT_DAY)}">VirusTotal ${v}/${VT_DAY}</span>`);
+  }
+  for(const k of ["search","core"]){
+    const r = ghRate[k]; if(!r) continue;
+    const used = r.limit - r.remaining;
+    chips.push(`<span class="chip ${level(used,r.limit)}">GitHub${k==="search"?"検索":""} 残り${r.remaining}/${r.limit}</span>`);
+  }
+  $("usage").innerHTML = chips.join("");
+}
+
+/* ===== Status messages ===== */
+function status(html, kind="info"){ $("status").innerHTML = html ? `<div class="msg ${kind}">${html}</div>` : ""; }
+
+/* ===== GitHub API ===== */
+async function gh(path, accept){
+  const c = cfg();
+  const headers = {"Accept": accept || "application/vnd.github+json"};
+  if(c.ghToken) headers["Authorization"] = "Bearer " + c.ghToken;
+  let res;
+  try{ res = await fetch("https://api.github.com" + path, {headers}); }
+  catch(e){ throw new Error("GitHubにつながりません。ネット接続を確認してください。"); }
+  const rem = res.headers.get("x-ratelimit-remaining"), lim = res.headers.get("x-ratelimit-limit"), rs = res.headers.get("x-ratelimit-resource");
+  if(rem !== null && lim !== null){
+    const key = rs === "search" ? "search" : "core";
+    ghRate[key] = {remaining:+rem, limit:+lim, reset:+res.headers.get("x-ratelimit-reset")};
+    renderUsage();
+  }
+  if(res.status === 403 || res.status === 429){
+    if(rem === "0"){
+      const reset = new Date(+res.headers.get("x-ratelimit-reset")*1000);
+      throw new Error(`GitHubの回数制限に達しました。${reset.getHours()}時${String(reset.getMinutes()).padStart(2,"0")}分ごろに戻ります。設定でGitHubトークンを入れると制限が大幅に増えます。`);
+    }
+  }
+  if(res.status === 404) return null;
+  if(!res.ok) throw new Error("GitHubでエラーが起きました（" + res.status + "）");
+  return accept && accept.includes("raw") ? res.text() : res.json();
+}
+
+/* ===== Gemini API ===== */
+const GEM_BASE = "https://generativelanguage.googleapis.com/v1beta";
+function gemAvailable(){
+  const c = cfg(); if(!c.gemKey) return false;
+  if(gemBlockedUntilDay === laDate()) return false;
+  return counter("gem", laDate()).n < gemLimitEff();
+}
+async function gemCandidates(){
+  const c = cfg();
+  if(c.gemModel) return [c.gemModel];
+  const cached = LS.get("gemAuto", null);
+  if(cached && cached.day === utcDate() && cached.list.length) return cached.list;
+  const r = await fetch(`${GEM_BASE}/models?pageSize=200&key=${encodeURIComponent(c.gemKey)}`);
+  if(!r.ok) throw new Error("Gemini APIキーを確認してください（" + r.status + "）");
+  const j = await r.json();
+  const ver = n => (n.match(/gemini-([\d.]+)/)||[])[1]?.split(".").map(Number) || [0];
+  const list = (j.models||[])
+    .filter(m => (m.supportedGenerationMethods||[]).includes("generateContent"))
+    .map(m => m.name.replace(/^models\//,""))
+    .filter(n => /^gemini-[\d.]+-flash(-lite)?$/.test(n))
+    .sort((a,b) => { const va=ver(a), vb=ver(b);
+      for(let i=0;i<Math.max(va.length,vb.length);i++){ const d=(vb[i]||0)-(va[i]||0); if(d) return d; }
+      return a.includes("lite") - b.includes("lite"); });
+  if(!list.length) list.push("gemini-flash-latest");
+  LS.set("gemAuto", {day:utcDate(), list});
+  return list;
+}
+async function gemini(prompt){
+  if(!gemAvailable()) throw new Error("GEMINI_UNAVAILABLE");
+  const c = cfg(); const cands = await gemCandidates();
+  let lastErr = "";
+  for(const model of cands.slice(0,4)){
+    let r;
+    try{
+      r = await fetch(`${GEM_BASE}/models/${model}:generateContent?key=${encodeURIComponent(c.gemKey)}`, {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({contents:[{role:"user",parts:[{text:prompt}]}], generationConfig:{responseMimeType:"application/json",temperature:0.3}})
+      });
+    }catch(e){ throw new Error("GEMINI_NETWORK"); }
+    const body = await r.text();
+    if(r.ok){
+      bump("gem", laDate());
+      if(!c.gemModel){ const a = LS.get("gemAuto",{day:utcDate(),list:[]}); a.list = [model, ...a.list.filter(x=>x!==model)]; LS.set("gemAuto",a); }
+      const j = JSON.parse(body);
+      const txt = (j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("");
+      return JSON.parse(txt.replace(/^```json|```$/g,"").trim());
+    }
+    lastErr = body;
+    const freeNotAllowed = r.status===429 && /limit:\s*0\b/.test(body);
+    if((r.status===404 || r.status===400 && /not found|not supported/i.test(body) || freeNotAllowed) && !c.gemModel) continue;
+    if(r.status===429){ gemBlockedUntilDay = laDate(); LS.set("gemBlocked", gemBlockedUntilDay); renderUsage(); throw new Error("GEMINI_LIMIT"); }
+    throw new Error("GEMINI_ERROR " + r.status);
+  }
+  throw new Error("GEMINI_ERROR " + lastErr.slice(0,120));
+}
+
+/* ===== Safety scoring ===== */
+const POPULAR = ["obs-studio","vscode","yt-dlp","ffmpeg","handbrake","audacity","blender","gimp","vlc","stats","rectangle","iina","whisper","whisper.cpp","ollama","stable-diffusion-webui","comfyui","telegram","notepad-plus-plus","7zip","qbittorrent","keepassxc","bitwarden","krita","inkscape","shotcut","kdenlive","obsidian","raycast","alt-tab-macos","maccy","hiddenbar","lm-studio","open-webui","calibre","bitcoin","electrum","metamask","exodus"];
+function lev(a,b){ const m=a.length,n=b.length; if(Math.abs(m-n)>2) return 9; const d=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]); for(let j=1;j<=n;j++) d[0][j]=j;
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++) d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1)); return d[m][n]; }
+const DANGER = [
+ [/(zip|rar|archive|file|extract)[^\n]{0,30}pass(word)?\s*[:：=]/i, "説明文に「パスワード付きの圧縮ファイル」の記載があります（ウイルス検査をすり抜ける手口）"],
+ [/パスワード\s*[:：は]/, "説明文に「パスワード付きの圧縮ファイル」の記載があります（ウイルス検査をすり抜ける手口）"],
+ [/\b(crack(ed)?|keygen|activator|serial key|license key generator|full version free|warez)\b/i, "「クラック」「有料ソフトが無料」などの危険な言葉があります"],
+ [/(mediafire\.com|mega\.nz|anonfiles|gofile\.io|bit\.ly|tinyurl\.com|cutt\.ly|t\.me\/)/i, "GitHub以外のダウンロードサイトや短縮URLに誘導しています"],
+ [/(disable|turn off)\s+(your\s+)?(antivirus|windows defender|defender)/i, "「ウイルス対策を切ってから使う」よう指示しています"],
+];
+function scoreRepo(repo, extra={}){
+  const flags = []; // [level, text]
+  const st = repo.stargazers_count||0;
+  if(st < 10) flags.push(["red", `スター数がとても少ない（${st}）`]);
+  else if(st < 100) flags.push(["yellow", `スター数が少なめ（${st}）`]);
+  else flags.push(["green", `スター数 ${st.toLocaleString()}`]);
+  const age = daysSince(repo.created_at);
+  if(age < 7) flags.push(["red", `公開されてから${Math.floor(age)}日しかたっていない`]);
+  else if(age < 60) flags.push(["yellow", `公開されてから${Math.floor(age)}日`]);
+  const idle = daysSince(repo.pushed_at);
+  if(idle > 730) flags.push(["yellow", `${Math.floor(idle/365)}年以上更新されていない`]);
+  if(repo.fork && extra.hasAssets) flags.push(["yellow","他のアプリのコピー（フォーク）なのに配布ファイルがある"]);
+  const nm = (repo.name||"").toLowerCase();
+  if(st < 1000){ for(const p of POPULAR){ const d=lev(nm,p); if(d>0 && d<=1 || (nm!==p && nm.replace(/[-_.]/g,"")===p.replace(/[-_.]/g,""))){ flags.push(["red",`有名アプリ「${p}」に似せた名前の可能性`]); break; } if(nm===p){ flags.push(["yellow",`有名アプリ「${p}」と同じ名前だが本家ではない可能性（スターが少ない）`]); break; } } }
+  if(extra.ownerCreated){ const oa = daysSince(extra.ownerCreated);
+    if(oa < 30) flags.push(["red", `作者のアカウントが作られて${Math.floor(oa)}日しかたっていない`]);
+    else if(oa < 180) flags.push(["yellow", `作者のアカウントが新しい（${Math.floor(oa)}日）`]); }
+  if(extra.downloads !== undefined && extra.hasAssets){
+    if(extra.downloads < 10) flags.push(["yellow", `ダウンロード数がとても少ない（${extra.downloads}）`]);
+    else flags.push(["green", `ダウンロード数 ${extra.downloads.toLocaleString()}`]); }
+  if(extra.readme){ const seen=new Set(); for(const [re,txt] of DANGER){ if(re.test(extra.readme) && !seen.has(txt)){ seen.add(txt); flags.push(["red",txt]); } } }
+  const lv = flags.some(f=>f[0]==="red") ? "red" : flags.some(f=>f[0]==="yellow") ? "yellow" : "green";
+  return {lv, flags};
+}
+const LV_LABEL = {green:"安全度：緑", yellow:"安全度：黄（注意）", red:"安全度：赤（危険）"};
+const badge = lv => `<span class="badge b-${lv}">${LV_LABEL[lv]}</span>`;
+
+/* ===== License ===== */
+function licenseJa(lic){
+  const id = lic?.spdx_id;
+  if(!lic || !id || id==="NOASSERTION" && !lic.name) return ["red","ライセンスなし・注意（改造・配布の許可がありません）"];
+  if(/^(MIT|Apache-2\.0|BSD-2-Clause|BSD-3-Clause|ISC|Unlicense|0BSD|Zlib|CC0-1\.0)$/.test(id)) return ["green",`改造OK・配布OK（${id}：元の作者名は消さない）`];
+  if(/GPL|MPL|EPL|CC-BY-SA/.test(id)) return ["yellow",`改造OK・配布は条件あり（${id}：配るときはソースも公開）`];
+  if(/CC-BY-NC/.test(id)) return ["yellow",`改造OK・商用はNG（${id}）`];
+  if(id==="NOASSERTION") return ["yellow","独自のライセンス・要確認"];
+  return ["yellow",`要確認（${id}）`];
+}
+function portJa(lang, macAsset){
+  if(macAsset) return ["green","Mac版あり（そのまま使える）"];
+  if(!lang) return ["gray","判定できません"];
+  if(/^(Swift|Objective-C)$/.test(lang)) return ["green",`Mac向けの言語（${lang}）`];
+  if(/^(Python|JavaScript|TypeScript|Java|Go|Rust|Kotlin|Ruby|PHP|Dart|HTML|Shell|Lua)$/.test(lang)) return ["green",`Mac移植：簡単（${lang}）`];
+  if(/^(C#|C\+\+|C|Visual Basic .NET|Pascal|Delphi|AutoHotkey|PowerShell|Batchfile)$/.test(lang)) return ["yellow",`Mac移植：大変（${lang}）→ 作り直しがおすすめ`];
+  return ["gray",`言語：${lang}`];
+}
+
+/* ===== Asset classification ===== */
+function assetOS(name){
+  const n = name.toLowerCase();
+  if(/\.(sha\d+|sig|asc|txt|json|yml|blockmap)$/.test(n)) return "other";
+  if(/\.(dmg|pkg)$/.test(n) || /(mac|darwin|osx|apple|universal)/.test(n)) return "mac";
+  if(/\.(exe|msi|msix|appx)$/.test(n) || /win(dows)?|x64-setup/.test(n)) return "win";
+  if(/\.(appimage|deb|rpm|flatpak|snap)$/.test(n) || /linux/.test(n)) return "linux";
+  if(/\.ipa$/.test(n)) return "ios";
+  if(/\.apk$/.test(n)) return "android";
+  return "other";
+}
+const OS_JA = {mac:"Mac用",win:"Windows用",linux:"Linux用",ios:"iPhone用",android:"Android用",other:"その他"};
+const fmtSize = b => b>1e9?(b/1e9).toFixed(1)+"GB":b>1e6?(b/1e6).toFixed(1)+"MB":Math.max(1,Math.round(b/1e3))+"KB";
+
+/* ===== Search ===== */
+let lastResults = [];
+function buildQuery(base){
+  let q = base.trim();
+  if($("fMac").checked) q += " macos";
+  if($("fData").checked) q += " topic:dataset";
+  if($("fRecent").checked){ const d=new Date(Date.now()-365*86400000).toISOString().slice(0,10); q += " pushed:>"+d; }
+  return q.trim();
+}
+async function runSearch(queries, label){
+  showSearch(); status(`<span class="spin"></span> ${esc(label)}`); $("resultsCard").classList.add("hidden");
+  try{
+    const sort = $("fSort").value;
+    const seen = new Map();
+    for(const q0 of queries.slice(0,2)){
+      const q = buildQuery(q0); if(!q) continue;
+      const j = await gh(`/search/repositories?q=${encodeURIComponent(q)}&sort=${sort}&order=desc&per_page=20`);
+      for(const it of (j?.items||[])) if(!seen.has(it.id)) seen.set(it.id, it);
+    }
+    let items = [...seen.values()];
+    items.sort((a,b)=> sort==="updated" ? new Date(b.pushed_at)-new Date(a.pushed_at) : b.stargazers_count-a.stargazers_count);
+    items = items.map(r => Object.assign(r, {_score: scoreRepo(r)}));
+    if($("fGreen").checked) items = items.filter(r=>r._score.lv==="green");
+    lastResults = items.slice(0,25);
+    renderResults();
+    if(!lastResults.length){ status("見つかりませんでした。言葉を変えるか、絞り込みを外してみてください。","warn"); return; }
+    status(`${esc(label)}：${lastResults.length}件見つかりました。`);
+    if(cfg().trans && gemAvailable()) translateResults();
+  }catch(e){ status(esc(e.message),"err"); }
+}
+async function translateResults(){
+  const map = {}; lastResults.forEach(r=>{ if(r.description) map[r.id]=r.description.slice(0,300); });
+  if(!Object.keys(map).length) return;
+  try{
+    const out = await gemini(`Translate each GitHub repository description into short, natural, easy Japanese (max 60 Japanese characters each). Return only a JSON object that maps each id (as a string) to its Japanese text.\nInput:\n${JSON.stringify(map)}`);
+    lastResults.forEach(r=>{ if(out[r.id]) r._ja = out[r.id]; });
+    renderResults();
+  }catch(e){ /* keep dictionary hints */ }
+}
+function renderResults(){
+  if(!lastResults.length){ $("resultsCard").classList.add("hidden"); return; }
+  $("resultsCard").classList.remove("hidden");
+  $("results").innerHTML = lastResults.map((r,i)=>{
+    const ja = r._ja ? `<div class="rja">🇯🇵 ${esc(r._ja)}</div>` : (enHint(r.description) ? `<div class="rja">目安：${esc(enHint(r.description))}</div>` : "");
+    const [ll,lt] = licenseJa(r.license);
+    return `<div class="result" data-i="${i}">
+      <div class="rname">${esc(r.full_name)}</div>
+      ${ja}<div class="rdesc">${esc(r.description||"（説明なし）")}</div>
+      <div class="meta">${badge(r._score.lv)}<span>★ ${r.stargazers_count.toLocaleString()}</span><span>更新 ${fmtDate(r.pushed_at)}</span>${r.language?`<span>${esc(r.language)}</span>`:""}<span class="badge b-${ll}">${esc(lt.split("（")[0])}</span></div>
+    </div>`;
+  }).join("");
+  $("results").querySelectorAll(".result").forEach(el=>el.onclick=()=>{ const r=lastResults[+el.dataset.i]; openRepo(r.owner.login, r.name); });
+}
+
+async function aiSearch(){
+  const text = $("aiText").value.trim(); if(!text) return;
+  if(gemAvailable()){
+    status(`<span class="spin"></span> Geminiが探し方を考えています…`); showSearch();
+    try{
+      const out = await gemini(`You help a Japanese user who cannot read English find apps, tools or data on GitHub.
+User request (Japanese): <<<${text}>>>
+Return only JSON: {"queries": [1 or 2 GitHub repository search queries in English, each 1-4 plain keywords, no quotes, no qualifiers], "intent_ja": "one short Japanese sentence saying what you will search for"}`);
+      const qs = (out.queries||[]).filter(Boolean);
+      $("aiMode").textContent = "方式：Gemini（" + (cfg().gemModel || (LS.get("gemAuto",{list:[]}).list[0]||"自動")) + "）";
+      if(qs.length) return runSearch(qs, out.intent_ja || "検索結果");
+    }catch(e){ fallbackNote(e); }
+  } else fallbackNote(null);
+  const q = jaToEn(text);
+  $("aiMode").textContent = "方式：日英対応表（Geminiが使えないため）";
+  runSearch([q], `「${q}」で検索`);
+}
+function fallbackNote(e){
+  const m = e?.message||"";
+  let why = !cfg().gemKey ? "Gemini APIキーが未設定です（設定から入れられます）" :
+    m==="GEMINI_LIMIT" || gemBlockedUntilDay===laDate() || counter("gem",laDate()).n>=gemLimitEff() ? "Geminiの1日の上限に達しました" :
+    m==="GEMINI_NETWORK" ? "Geminiにつながりませんでした" : "Geminiでエラーが起きました";
+  setTimeout(()=>{ const s=$("status"); s.insertAdjacentHTML("afterbegin", `<div class="msg warn">${esc(why)}。日英対応表の方式に切り替えて検索しました。</div>`); }, 50);
+}
+
+/* ===== Detail ===== */
+let current = null;
+function showSearch(){ $("searchView").classList.remove("hidden"); $("detailView").classList.add("hidden"); }
+function showDetail(){ $("searchView").classList.add("hidden"); $("detailView").classList.remove("hidden"); window.scrollTo(0,0); }
+
+async function openRepo(owner, name){
+  showDetail(); $("detail").innerHTML = `<div class="card"><span class="spin"></span> 読み込み中…</div>`;
+  try{
+    const repo = await gh(`/repos/${owner}/${name}`);
+    if(!repo){ $("detail").innerHTML = `<div class="msg err">見つかりませんでした。URLを確認してください。</div>`; return; }
+    const [rels, readme, user] = await Promise.all([
+      gh(`/repos/${owner}/${name}/releases?per_page=5`).catch(()=>[]),
+      gh(`/repos/${owner}/${name}/readme`, "application/vnd.github.raw").catch(()=>""),
+      gh(`/users/${repo.owner.login}`).catch(()=>null)
+    ]);
+    const rel = (rels||[]).find(r=>!r.draft) || null;
+    const assets = (rel?.assets||[]).map(a=>Object.assign(a,{_os:assetOS(a.name)}))
+      .sort((a,b)=>(a._os==="mac"?0:a._os==="other"?2:1)-(b._os==="mac"?0:b._os==="other"?2:1));
+    const downloads = assets.reduce((s,a)=>s+(a.download_count||0),0);
+    const sc = scoreRepo(repo, {ownerCreated:user?.created_at, readme:readme||"", hasAssets:assets.length>0, downloads});
+    current = {repo, rel, assets, sc, readme};
+    renderDetail();
+  }catch(e){ $("detail").innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+}
+function renderDetail(){
+  const {repo, rel, assets, sc} = current;
+  const [ll,lt] = licenseJa(repo.license);
+  const macAsset = assets.some(a=>a._os==="mac");
+  const [pl,pt] = portJa(repo.language, macAsset);
+  const flagIcon = {green:"🟢",yellow:"🟡",red:"🔴"};
+  const zipUrl = `https://github.com/${repo.full_name}/archive/refs/heads/${encodeURIComponent(repo.default_branch)}.zip`;
+  $("detail").innerHTML = `
+  <div class="card">
+    <h2 style="word-break:break-all">${esc(repo.full_name)}</h2>
+    <div id="dJa"></div>
+    <div class="rdesc">${esc(repo.description||"（説明なし）")}</div>
+    <div class="row" style="margin-top:6px"><button class="btn sub" id="transBtn" ${gemAvailable()?"":"disabled"}>説明を日本語に訳す</button>
+      <a class="btn sub" href="${esc(repo.html_url)}" target="_blank" rel="noopener">GitHubで見る</a></div>
+    <div class="meta" style="margin-top:10px"><span>★ ${repo.stargazers_count.toLocaleString()}</span><span>作者 ${esc(repo.owner.login)}</span><span>作成 ${fmtDate(repo.created_at)}</span><span>更新 ${fmtDate(repo.pushed_at)}</span></div>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">安全度</h3>${badge(sc.lv)}
+    <ul class="safety-list">${sc.flags.map(f=>`<li>${flagIcon[f[0]]} ${esc(f[1])}</li>`).join("")}</ul>
+    <h3>ライセンス（改造・配布のルール）</h3><span class="badge b-${ll}">${esc(lt)}</span>
+    <h3>Macで使えるか</h3><span class="badge b-${pl}">${esc(pt)}</span>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">ダウンロード${rel?`（最新版 ${esc(rel.tag_name)}・${fmtDate(rel.published_at)}）`:""}</h3>
+    ${assets.length ? assets.map((a,i)=>`<div class="asset"><span class="ostag ${a._os==="mac"?"mac":""}">${OS_JA[a._os]}</span>
+      <span class="an">${esc(a.name)} <span class="note">${fmtSize(a.size)}・${(a.download_count||0).toLocaleString()}回</span></span>
+      <button class="btn ${a._os==="mac"?"":"sub"}" data-a="${i}">ダウンロード</button></div>`).join("")
+      : `<div class="note">完成品（配布ファイル）はありません。</div>`}
+    <div class="asset"><span class="ostag">ソース</span><span class="an">ソースコード一式（zip）<br><span class="note">※ ソースコードはVirusTotalでの事前チェックができません</span></span>
+      <a class="btn sub" href="${esc(zipUrl)}" target="_blank" rel="noopener" id="zipBtn">ダウンロード</a></div>
+    <div class="note" style="margin-top:8px">iPhoneでは保存先に「iCloud Drive」を選ぶと、家のMacに自動で同期されます。</div>
+  </div>`;
+  $("detail").querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>checkAndDownload(current.assets[+b.dataset.a]));
+  $("transBtn").onclick = async ()=>{
+    $("transBtn").disabled = true; $("dJa").innerHTML = `<span class="spin"></span>`;
+    try{
+      const out = await gemini(`Translate this GitHub repository description and README excerpt into easy Japanese for a beginner. Return only JSON: {"ja": "Japanese summary, max 300 characters"}.\nDescription: ${repo.description||""}\nREADME excerpt: ${(current.readme||"").slice(0,3000)}`);
+      $("dJa").innerHTML = `<div class="rja" style="display:block">🇯🇵 ${esc(out.ja||"")}</div>`;
+    }catch(e){ $("dJa").innerHTML = `<div class="msg warn">翻訳できませんでした（${e.message==="GEMINI_LIMIT"?"Geminiの上限":"エラー"}）。</div>`; }
+  };
+}
+
+/* ===== Virus check before download ===== */
+let vtTimes = [];
+async function vtLookup(sha){
+  const c = cfg();
+  if(!c.vtKey) return {state:"nokey"};
+  if(counter("vt",utcDate()).n >= VT_DAY) return {state:"limit"};
+  vtTimes = vtTimes.filter(t=>Date.now()-t<60000);
+  if(vtTimes.length >= VT_MIN){ const wait = 60000-(Date.now()-vtTimes[0]); await new Promise(r=>setTimeout(r, wait+300)); }
+  vtTimes.push(Date.now());
+  let r;
+  try{ r = await fetch(`https://www.virustotal.com/api/v3/files/${sha}`, {headers:{"x-apikey":c.vtKey}}); }
+  catch(e){ return {state:"blocked"}; }
+  bump("vt", utcDate());
+  if(r.status === 404) return {state:"unknown"};
+  if(r.status === 429) return {state:"limit"};
+  if(r.status === 401 || r.status === 403) return {state:"badkey"};
+  if(!r.ok) return {state:"error"};
+  const j = await r.json(); const s = j.data?.attributes?.last_analysis_stats || {};
+  return {state:"ok", mal:s.malicious||0, sus:s.suspicious||0, total:(s.malicious||0)+(s.suspicious||0)+(s.undetected||0)+(s.harmless||0)};
+}
+function recordDownload(a, verdict){
+  const list = LS.get("downloads", []);
+  list.unshift({repo:current.repo.full_name, name:a.name, sha:a.digest||"", verdict, at:new Date().toISOString()});
+  LS.set("downloads", list.slice(0,300));
+}
+async function checkAndDownload(a){
+  const m = $("dlModal"), s = $("dlSheet"); m.classList.add("on");
+  s.innerHTML = `<h2>ウイルスチェック</h2><div class="note" style="word-break:break-all">${esc(a.name)}</div><div class="vt-big" style="background:#eef2fa"><span class="spin"></span> 確認中…</div>`;
+  const sha = (a.digest||"").replace(/^sha256:/,"");
+  const vtPage = sha ? `https://www.virustotal.com/gui/file/${sha}` : "https://www.virustotal.com/gui/home/upload";
+  let lv, title, body;
+  if(!sha){ lv="yellow"; title="🟡 事前チェックできません"; body="このファイルには指紋（SHA256）が公開されていません（古い配布ファイル）。ダウンロード後、VirusTotalのサイトにファイルを入れて確認してください。"; }
+  else{
+    const v = await vtLookup(sha);
+    if(v.state==="ok"){
+      if(v.mal>=3){ lv="red"; title=`🔴 危険：${v.mal}/${v.total}のウイルス対策ソフトが検出`; body="ダウンロードしないことを強くおすすめします。"; }
+      else if(v.mal>=1 || v.sus>=2){ lv="yellow"; title=`🟡 注意：${v.mal+v.sus}/${v.total}のソフトが反応`; body="少数の反応は誤検知のこともあります。結果ページで内容を確認してから判断してください。"; }
+      else { lv="green"; title=`🟢 検出なし（0/${v.total}）`; body="70種類前後のウイルス対策ソフトで問題は見つかりませんでした。ただし新種のウイルスは見逃すことがあります。"; }
+    } else {
+      lv="yellow";
+      const t = {unknown:["🟡 未検査","VirusTotalにまだ登録されていない新しいファイルです。ダウンロード後、VirusTotalのサイトにファイルを入れて調べてから開いてください。"],
+        nokey:["🟡 自動チェックなし","VirusTotal APIキーが未設定です。下の「VirusTotalで見る」で結果を確認できます（設定でキーを入れると自動になります）。"],
+        limit:["🟡 VirusTotalの上限に達しました","今日の自動チェックの上限です。「VirusTotalで見る」で確認してください。"],
+        blocked:["🟡 自動チェックできませんでした","ブラウザからVirusTotalに直接つなげませんでした。「VirusTotalで見る」で確認してください。"],
+        badkey:["🟡 キーが正しくありません","VirusTotal APIキーを確認してください。"],
+        error:["🟡 確認中にエラー","「VirusTotalで見る」で確認してください。"]}[v.state];
+      [title, body] = t;
+    }
+  }
+  const bg = {green:"var(--greenbg)",yellow:"var(--yellowbg)",red:"var(--redbg)"}[lv];
+  s.innerHTML = `<h2>ウイルスチェック</h2><div class="note" style="word-break:break-all">${esc(a.name)}</div>
+   <div class="vt-big" style="background:${bg}">${title}</div><p style="font-size:14px">${body}</p>
+   ${lv==="red"?`<label style="display:block;margin:8px 0;font-size:14px"><input type="checkbox" id="riskOk"> 危険を理解したうえでダウンロードする</label>`:""}
+   <div class="row" style="justify-content:flex-end">
+     <a class="btn sub" href="${esc(vtPage)}" target="_blank" rel="noopener">VirusTotalで見る</a>
+     <button class="btn sub" id="dlCancel">やめる</button>
+     <a class="btn ${lv==="red"?"red":"green"}" id="dlGo" href="${esc(a.browser_download_url)}" target="_blank" rel="noopener">ダウンロード</a>
+   </div>`;
+  $("dlCancel").onclick = ()=> m.classList.remove("on");
+  const go = $("dlGo");
+  if(lv==="red"){ go.style.opacity=.4; go.style.pointerEvents="none"; $("riskOk").onchange=e=>{ go.style.opacity=e.target.checked?1:.4; go.style.pointerEvents=e.target.checked?"auto":"none"; }; }
+  go.onclick = ()=>{ recordDownload(a, lv); setTimeout(()=>m.classList.remove("on"), 300); };
+}
+
+/* ===== App update (compares with version.json on the same site) ===== */
+function newer(a,b){ const pa=a.split(".").map(Number), pb=b.split(".").map(Number); for(let i=0;i<3;i++){ if((pa[i]||0)!==(pb[i]||0)) return (pa[i]||0)>(pb[i]||0); } return false; }
+async function checkUpdate(manual){
+  if(location.protocol === "file:"){ if(manual) $("updMsg").textContent = "GitHubに置いてから使えます"; return; }
+  try{
+    const r = await fetch("version.json?t="+Date.now(), {cache:"no-store"});
+    if(!r.ok) throw 0;
+    const j = await r.json();
+    if(j.version && newer(j.version, APP_VERSION)){
+      const b = $("updBtn"); b.textContent = `⬆ v${j.version} に更新`; b.classList.remove("hidden");
+      b.title = j.notes || "";
+      b.onclick = ()=>{ if(confirm(`新しいバージョン v${j.version} に更新します。\n${j.notes||""}`)) location.replace(location.pathname + "?v=" + encodeURIComponent(j.version) + "&t=" + Date.now()); };
+      if(manual) $("updMsg").textContent = `v${j.version} があります（上の黄色いボタンで更新）`;
+    } else if(manual) $("updMsg").textContent = "最新版です";
+  }catch(e){ if(manual) $("updMsg").textContent = "確認できませんでした"; }
+}
+
+/* ===== Settings ===== */
+function openSettings(){
+  const c = cfg();
+  $("sGemKey").value=c.gemKey; $("sGemModel").value=c.gemModel; $("sGemLimit").value=c.gemLimit; $("sGemShare").value=c.gemShare;
+  $("sTrans").checked=c.trans; $("sVtKey").value=c.vtKey; $("sGhToken").value=c.ghToken; $("sWarn").value=c.warn; $("updMsg").textContent="";
+  $("setModal").classList.add("on");
+}
+function saveSettings(){
+  const old = cfg();
+  const c = {gemKey:$("sGemKey").value.trim(), gemModel:$("sGemModel").value.trim(), gemLimit:Math.max(1,+$("sGemLimit").value||200),
+    gemShare:Math.min(100,Math.max(1,+$("sGemShare").value||100)), trans:$("sTrans").checked, vtKey:$("sVtKey").value.trim(),
+    ghToken:$("sGhToken").value.trim(), warn:Math.min(100,Math.max(10,+$("sWarn").value||80))};
+  if(c.gemKey!==old.gemKey){ LS.set("gemAuto",null); gemBlockedUntilDay=""; LS.set("gemBlocked",""); }
+  LS.set("cfg", c); $("setModal").classList.remove("on"); renderUsage(); updateAiMode();
+}
+function updateAiMode(){
+  $("aiMode").textContent = !cfg().gemKey ? "方式：日英対応表（設定でGemini APIキーを入れると、文章の意味を理解して探せます）" :
+    gemAvailable() ? "方式：Gemini" : "方式：日英対応表（Geminiは今日の上限に達しました）";
+}
+
+/* ===== Wire up ===== */
+$("verLabel").textContent = "v" + APP_VERSION; $("verFoot").textContent = "v" + APP_VERSION;
+$("tabs").querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  $("tabs").querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===t));
+  document.querySelectorAll("[data-p]").forEach(p=>p.classList.toggle("hidden", p.dataset.p!==t.dataset.t));
+});
+$("genres").innerHTML = GENRES.map((g,i)=>`<button class="genre" data-g="${i}">${esc(g[0])}</button>`).join("");
+$("genres").querySelectorAll(".genre").forEach(b=>b.onclick=()=>{ const g=GENRES[+b.dataset.g]; runSearch([g[1]], `ジャンル「${g[0]}」`); });
+$("aiGo").onclick = aiSearch;
+$("kwGo").onclick = ()=>{ const t=$("kwText").value.trim(); if(!t) return; const q=jaToEn(t); runSearch([q], `「${t}」（${q}）`); };
+$("kwText").onkeydown = e=>{ if(e.key==="Enter") $("kwGo").click(); };
+$("rankNew").onclick = ()=>{ const d=new Date(Date.now()-60*86400000).toISOString().slice(0,10); runSearch([`created:>${d} stars:>50`], "最近人気が出ているもの（60日以内に公開）"); };
+$("rankAll").onclick = ()=> runSearch(["stars:>20000"], "ずっと人気のもの");
+$("urlGo").onclick = ()=>{
+  const m = $("urlText").value.trim().match(/github\.com\/([^\/\s#?]+)\/([^\/\s#?]+)/i);
+  if(!m){ status("GitHubのURLを貼ってください（例：https://github.com/作者/アプリ名）","warn"); return; }
+  openRepo(m[1], m[2].replace(/\.git$/,""));
+};
+$("urlText").onkeydown = e=>{ if(e.key==="Enter") $("urlGo").click(); };
+$("backBtn").onclick = showSearch;
+$("setBtn").onclick = openSettings; $("setCancel").onclick = ()=>$("setModal").classList.remove("on"); $("setSave").onclick = saveSettings;
+$("chkUpd").onclick = ()=>checkUpdate(true);
+[$("setModal"),$("dlModal")].forEach(m=>m.addEventListener("click",e=>{ if(e.target===m) m.classList.remove("on"); }));
+renderUsage(); updateAiMode(); checkUpdate(false);
+</script>
+</body>
+</html>
