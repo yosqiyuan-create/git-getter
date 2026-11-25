@@ -1,7 +1,7 @@
 {
  "id": "git-getter",
  "name": "Git Getter",
- "version": "1.6.0",
+ "version": "1.6.1",
  "date": "2026-11-25",
- "notes": "リンクを貼って探せるように（GitHub以外の紹介ページや記事もOK）"
+ "notes": "ダウンロードしたファイルの名前と保存場所を表示"
 }

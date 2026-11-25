@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.6.0">
+<meta name="app-version" content="1.6.1">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -219,7 +219,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.6.0";
+const APP_VERSION = "1.6.1";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -811,6 +811,7 @@ function renderDetail(){
   const langLine = langShare(current.langs);
   const flagIcon = {green:"🟢",yellow:"🟡",red:"🔴"};
   const zipUrl = `https://github.com/${repo.full_name}/archive/refs/heads/${encodeURIComponent(repo.default_branch)}.zip`;
+  const zipName = `${repo.name}-${String(repo.default_branch).replace(/\//g,"-")}.zip`;
   $("detail").innerHTML = `
   <div class="card">
     <h2 style="word-break:break-all">${esc(repo.full_name)}</h2>
@@ -836,12 +837,13 @@ function renderDetail(){
       <span class="an">${esc(a.name)} <span class="note">${fmtSize(a.size)}・${(a.download_count||0).toLocaleString()}回</span></span>
       <button class="btn ${a._os==="mac"?"":"sub"}" data-a="${i}">ダウンロード</button></div>`).join("")
       : `<div class="note">完成品（配布ファイル）はありません。</div>`}
-    <div class="asset"><span class="ostag">ソース</span><span class="an">ソースコード一式（zip）</span>
-      <a class="btn sub" href="${esc(zipUrl)}" target="_blank" rel="noopener" id="zipBtn">ダウンロード</a></div>
+    <div class="asset"><span class="ostag">ソース</span><span class="an">ソースコード一式（アプリの設計図）<br><span class="note">保存される名前：${esc(zipName)}</span></span>
+      <button class="btn sub" id="zipBtn">ダウンロード</button></div>
     <div class="note" style="margin-top:8px">iPhoneでは保存先に「iCloud Drive」を選ぶと、家のMacに自動で同期されます。<a href="#" id="helpLink">保存のしかた</a></div>
   </div>`;
   $("detail").querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>directDownload(current.assets[+b.dataset.a]));
   $("remakeBtn").onclick = openRemake;
+  $("zipBtn").onclick = ()=> directDownload({name: zipName, browser_download_url: zipUrl});
   $("helpLink").onclick = e=>{ e.preventDefault(); openHelp(); };
   $("starBtn").onclick = ()=>{ toggleFav(current); renderDetail(); };
   markFavSeen(repo.full_name, rel?.tag_name);
@@ -866,7 +868,10 @@ function directDownload(a){
   document.body.appendChild(link); link.click(); link.remove();
   recordDownload(a);
   const box = document.createElement("div"); box.className = "msg info";
-  box.textContent = `「${a.name}」をダウンロードしました。iPhoneでは保存先を「iCloud Drive」にすると、家のMacでも開けます。`;
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+  box.textContent = isIOS
+    ? `「${a.name}」という名前で保存されます。Safariの「ダウンロードしますか？」で「ダウンロード」を押してください。保存場所：「ファイル」アプリ →「ダウンロード」（iCloud Driveに保存すると、家のMacでも開けます）`
+    : `「${a.name}」という名前で保存されます。保存場所：Finderの「ダウンロード」フォルダ`;
   $("detail").prepend(box); window.scrollTo({top:0, behavior:"smooth"});
 }
 
