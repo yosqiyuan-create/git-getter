@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.6.2">
+<meta name="app-version" content="1.6.3">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -152,6 +152,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
       </div>
 
       <div data-p="fav" class="hidden">
+        <button class="back" id="favBack">← 検索にもどる</button>
         <div class="row">
           <button class="btn" id="favCheck">新しい版を今すぐ確認</button>
         </div>
@@ -220,7 +221,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.6.2";
+const APP_VERSION = "1.6.3";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -1079,8 +1080,22 @@ $("gemTest").onclick = async ()=>{
 };
 [$("setModal"),$("dlModal")].forEach(m=>m.addEventListener("click",e=>{ if(e.target===m) m.classList.remove("on"); }));
 $("bellBtn").onclick = openNotices;
+let tabBeforeFav = "ai";
+function currentTab(){ return $("tabs").querySelector(".tab.on")?.dataset.t || "ai"; }
+function goTab(name){
+  const t = $("tabs").querySelector(`[data-t="${name}"]`); t.click();
+  t.scrollIntoView({block:"nearest", inline:"nearest"});
+}
+function leaveFav(){
+  goTab(tabBeforeFav === "fav" ? "ai" : tabBeforeFav);
+  $("tabs").scrollTo({left:0, behavior:"smooth"});
+  if(lastResults.length) $("resultsCard").classList.remove("hidden");   // show the previous results again
+}
+$("favBack").onclick = leaveFav;
 $("favBtn").onclick = ()=>{
   showSearch();
+  if(currentTab() === "fav"){ leaveFav(); return; }   // pressing ⭐ again goes back
+  tabBeforeFav = currentTab();
   const t = $("tabs").querySelector('[data-t="fav"]'); t.click();
   t.scrollIntoView({block:"nearest", inline:"end"}); window.scrollTo({top:0, behavior:"smooth"});
 };

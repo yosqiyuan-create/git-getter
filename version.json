@@ -1,7 +1,7 @@
 {
  "id": "git-getter",
  "name": "Git Getter",
- "version": "1.6.2",
+ "version": "1.6.3",
  "date": "2026-11-25",
- "notes": "画面の上に⭐お気に入りボタンを追加"
+ "notes": "お気に入りから検索画面にもどるボタンを追加"
 }
