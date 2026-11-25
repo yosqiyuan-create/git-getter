@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.2.0">
+<meta name="app-version" content="1.3.0">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -152,7 +152,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 
       <div data-p="fav" class="hidden">
         <div class="row">
-          <button class="btn" id="favCheck">新しい版とウイルスを今すぐ確認</button>
+          <button class="btn" id="favCheck">新しい版を今すぐ確認</button>
         </div>
         <div class="note" id="favStatus" style="margin-top:6px"></div>
         <div id="favList" style="margin-top:8px"></div>
@@ -195,20 +195,26 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 <div class="modal" id="setModal"><div class="sheet">
   <h2>⚙ 設定</h2>
   <div class="note" style="margin-bottom:10px">キーはこの端末の中だけに保存されます（プログラムには書き込まれません）。</div>
+  <h3 style="margin-top:0">アプリの更新</h3>
+  <div class="row"><button class="btn sub" id="chkUpd">新しいバージョンを確認</button><button class="btn hidden" id="updBtn2" style="background:#ffcc33;color:#3a2a00;font-weight:700">⬆ バージョンアップ</button><span class="note" id="updMsg"></span></div>
   <h3>Gemini（言葉で頼んで探す・日本語訳）</h3>
   <div class="field"><label>Gemini APIキー（無料・Google AI Studioで取得）</label><input type="password" id="sGemKey" autocomplete="off"></div>
   <div class="field"><label>モデル名（空欄なら自動で選びます）</label><input type="text" id="sGemModel" placeholder="自動"></div>
   <div class="field"><label>1日の上限回数（Google AI Studioで確認した数字）</label><input type="number" id="sGemLimit" min="1"></div>
   <div class="field"><label>この端末で使う割合（%）MacとiPhoneで分けるとき用。例：50</label><input type="number" id="sGemShare" min="1" max="100"></div>
   <div class="field"><label><input type="checkbox" id="sTrans"> 検索結果の説明文を自動で日本語に訳す（1回の検索でGeminiを1回多く使います）</label></div>
-  <h3>VirusTotal（ダウンロード前のウイルスチェック）</h3>
-  <div class="field"><label>VirusTotal APIキー（無料・個人利用のみ）</label><input type="password" id="sVtKey" autocomplete="off"></div>
+  <h3>ウイルスチェック</h3>
+  <div class="note" style="margin-bottom:8px">ウイルスチェックはMac補助アプリがまとめて行います（iPhoneはダウンロードだけ）。</div>
+  <div class="field"><label><input type="checkbox" id="sPreCheck"> この端末でもダウンロード前にチェックする（VirusTotal・任意）</label></div>
+  <div class="field"><label>VirusTotal APIキー（上をオンにするときだけ必要）</label><input type="password" id="sVtKey" autocomplete="off"></div>
+  <h3>Mac補助アプリ（Macでのウイルスチェック・解凍・インストール）</h3>
+  <div class="note">Macの「ターミナル」に下の1行を貼り付けてEnterを押すと、自動でインストールされます。</div>
+  <textarea id="helperCmd" readonly style="min-height:64px;font-size:12px;margin-top:6px"></textarea>
+  <div class="row" style="margin-top:6px"><button class="btn sub" id="helperCopy">コピーする</button><span class="note" id="helperMsg"></span></div>
   <h3>GitHub</h3>
   <div class="field"><label>GitHubトークン（任意・入れると回数制限が増えます）</label><input type="password" id="sGhToken" autocomplete="off"></div>
   <h3>警告</h3>
   <div class="field"><label>何%使ったら警告を出すか</label><input type="number" id="sWarn" min="10" max="100"></div>
-  <h3>アプリの更新</h3>
-  <div class="row"><button class="btn sub" id="chkUpd">新しいバージョンを確認</button><span class="note" id="updMsg"></span></div>
   <div class="row" style="margin-top:18px;justify-content:flex-end">
     <button class="btn sub" id="setCancel">閉じる</button><button class="btn" id="setSave">保存</button>
   </div>
@@ -220,14 +226,14 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.3.0";
 
 /* ===== Storage helpers ===== */
 const LS = {
   get(k, d){ try{ const v = localStorage.getItem("gg_"+k); return v===null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem("gg_"+k, JSON.stringify(v)); }catch(e){} }
 };
-const cfg = () => Object.assign({gemKey:"",gemModel:"",gemLimit:200,gemShare:100,trans:true,vtKey:"",ghToken:"",warn:80}, LS.get("cfg",{}));
+const cfg = () => Object.assign({gemKey:"",gemModel:"",gemLimit:200,gemShare:100,trans:true,vtKey:"",preCheck:false,ghToken:"",warn:80}, LS.get("cfg",{}));
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmtDate = s => s ? s.slice(0,10) : "-";
@@ -301,7 +307,7 @@ function renderUsage(){
     const lv = gemBlockedUntilDay===laDate() ? "over" : level(g,L);
     chips.push(`<span class="chip ${lv}">Gemini ${g}/${L}${lv==="over"?" 上限":""}</span>`);
   }
-  if(c.vtKey){
+  if(c.vtKey && c.preCheck){
     const v = counter("vt", utcDate()).n;
     chips.push(`<span class="chip ${level(v,VT_DAY)}">VirusTotal ${v}/${VT_DAY}</span>`);
   }
@@ -719,7 +725,7 @@ function renderDetail(){
       <a class="btn sub" href="${esc(zipUrl)}" target="_blank" rel="noopener" id="zipBtn">ダウンロード</a></div>
     <div class="note" style="margin-top:8px">iPhoneでは保存先に「iCloud Drive」を選ぶと、家のMacに自動で同期されます。<a href="#" id="helpLink">保存のしかた</a></div>
   </div>`;
-  $("detail").querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>checkAndDownload(current.assets[+b.dataset.a]));
+  $("detail").querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{ const a=current.assets[+b.dataset.a]; (cfg().preCheck && cfg().vtKey) ? checkAndDownload(a) : directDownload(a); });
   $("remakeBtn").onclick = openRemake;
   $("helpLink").onclick = e=>{ e.preventDefault(); openHelp(); };
   $("starBtn").onclick = ()=>{ toggleFav(current); renderDetail(); };
@@ -799,6 +805,22 @@ async function checkAndDownload(a){
   go.onclick = ()=>{ recordDownload(a, lv); setTimeout(()=>m.classList.remove("on"), 300); };
 }
 
+function directDownload(a){
+  if(current.sc.lv === "red" && !confirm("このアプリは安全度が「赤（危険）」です。それでもダウンロードしますか？")) return;
+  const link = document.createElement("a"); link.href = a.browser_download_url; link.target = "_blank"; link.rel = "noopener";
+  document.body.appendChild(link); link.click(); link.remove();
+  recordDownload(a, "unchecked");
+  const box = document.createElement("div"); box.className = "msg info";
+  box.textContent = `「${a.name}」をダウンロードしました。Macでは補助アプリが自動でウイルスチェックします。iPhoneでは保存先を「iCloud Drive」の「Git Getter」フォルダにしてください。`;
+  $("detail").prepend(box); window.scrollTo({top:0, behavior:"smooth"});
+}
+function helperBase(){ return location.origin + location.pathname.replace(/[^\/]*$/,"").replace(/\/$/,""); }
+function renderHelperCmd(){
+  if(location.protocol === "file:"){ $("helperCmd").value = "GitHubに置いたGit Getterから開くと、ここにインストール用の1行が出ます。"; $("helperCopy").disabled = true; return; }
+  const base = helperBase();
+  $("helperCmd").value = `curl -fsSL "${base}/helper/install.sh" | GG_BASE="${base}" bash`;
+}
+
 /* ===== App update (compares with version.json on the same site) ===== */
 function newer(a,b){ const pa=a.split(".").map(Number), pb=b.split(".").map(Number); for(let i=0;i<3;i++){ if((pa[i]||0)!==(pb[i]||0)) return (pa[i]||0)>(pb[i]||0); } return false; }
 async function checkUpdate(manual){
@@ -808,11 +830,11 @@ async function checkUpdate(manual){
     if(!r.ok) throw 0;
     const j = await r.json();
     if(j.version && newer(j.version, APP_VERSION)){
-      const b = $("updBtn"); b.textContent = `⬆ v${j.version}`; b.title = "バージョンアップ"; b.classList.remove("hidden");
-      b.title = j.notes || "";
-      b.onclick = ()=>{ if(confirm(`新しいバージョン v${j.version} に更新します。\n${j.notes||""}`)) location.replace(location.pathname + "?v=" + encodeURIComponent(j.version) + "&t=" + Date.now()); };
-      if(manual) $("updMsg").textContent = `v${j.version} があります（上の黄色いボタンで更新）`;
-    } else if(manual) $("updMsg").textContent = "最新版です";
+      const go = ()=> location.replace(location.pathname + "?v=" + encodeURIComponent(j.version) + "&t=" + Date.now());
+      const b = $("updBtn"); b.textContent = `⬆ v${j.version}`; b.title = j.notes || "バージョンアップ"; b.classList.remove("hidden"); b.onclick = go;
+      const b2 = $("updBtn2"); b2.textContent = `⬆ v${j.version} にバージョンアップ`; b2.classList.remove("hidden"); b2.onclick = go;
+      $("updMsg").textContent = j.notes ? `新しい版の内容：${j.notes}` : "";
+    } else { $("updBtn2").classList.add("hidden"); if(manual) $("updMsg").textContent = "最新版です"; }
   }catch(e){ if(manual) $("updMsg").textContent = "確認できませんでした"; }
 }
 
@@ -820,13 +842,13 @@ async function checkUpdate(manual){
 function openSettings(){
   const c = cfg();
   $("sGemKey").value=c.gemKey; $("sGemModel").value=c.gemModel; $("sGemLimit").value=c.gemLimit; $("sGemShare").value=c.gemShare;
-  $("sTrans").checked=c.trans; $("sVtKey").value=c.vtKey; $("sGhToken").value=c.ghToken; $("sWarn").value=c.warn; $("updMsg").textContent="";
+  $("sTrans").checked=c.trans; $("sVtKey").value=c.vtKey; $("sPreCheck").checked=c.preCheck; renderHelperCmd(); checkUpdate(false); $("sGhToken").value=c.ghToken; $("sWarn").value=c.warn; $("updMsg").textContent="";
   $("setModal").classList.add("on");
 }
 function saveSettings(){
   const old = cfg();
   const c = {gemKey:$("sGemKey").value.trim(), gemModel:$("sGemModel").value.trim(), gemLimit:Math.max(1,+$("sGemLimit").value||200),
-    gemShare:Math.min(100,Math.max(1,+$("sGemShare").value||100)), trans:$("sTrans").checked, vtKey:$("sVtKey").value.trim(),
+    gemShare:Math.min(100,Math.max(1,+$("sGemShare").value||100)), trans:$("sTrans").checked, vtKey:$("sVtKey").value.trim(), preCheck:$("sPreCheck").checked,
     ghToken:$("sGhToken").value.trim(), warn:Math.min(100,Math.max(10,+$("sWarn").value||80))};
   if(c.gemKey!==old.gemKey){ LS.set("gemAuto",null); gemBlockedUntilDay=""; LS.set("gemBlocked",""); }
   LS.set("cfg", c); $("setModal").classList.remove("on"); renderUsage(); updateAiMode();
@@ -886,12 +908,12 @@ function renderFavs(){
   $("favList").innerHTML = l.length ? l.map((f,i)=>`<div class="fav">
      <a href="#" class="rname" data-f="${i}">${esc(f.full)}</a> ${f.newTag?`<span class="newtag">新しい版 ${esc(f.newTag)}</span>`:""}
      <div class="note">${esc(f.desc||"")}</div>
-     <div class="meta">今の版 ${esc(f.tag||"なし")}${(f.assets||[]).map(a=>` ・ ${esc(a.name)} ${vtBadge(a.sha)}`).join("")}</div></div>`).join("")
+     <div class="meta">今の版 ${esc(f.tag||"なし")}${cfg().preCheck?(f.assets||[]).map(a=>` ・ ${esc(a.name)} ${vtBadge(a.sha)}`).join(""):""}</div></div>`).join("")
     : `<div class="note">まだありません。アプリの詳細画面の「☆ お気に入りに追加」で登録できます。</div>`;
   $("favList").querySelectorAll("[data-f]").forEach(a=>a.onclick=e=>{ e.preventDefault(); const [o,n]=l[+a.dataset.f].full.split("/"); openRepo(o,n); });
   const d = LS.get("downloads", []);
   $("dlList").innerHTML = d.length ? d.slice(0,30).map(x=>`<div class="fav"><span class="rname">${esc(x.name)}</span>
-     <div class="meta"><span>${esc(x.repo)}</span><span>${esc((x.at||"").slice(0,10))}</span>${x.sha?vtBadge(x.sha.replace(/^sha256:/,"")):`<span class="badge b-gray">指紋なし</span>`}</div></div>`).join("")
+     <div class="meta"><span>${esc(x.repo)}</span><span>${esc((x.at||"").slice(0,10))}</span>${x.verdict==="unchecked"?`<span class="badge b-gray">Macでチェック</span>`:x.sha?vtBadge(x.sha.replace(/^sha256:/,"")):""}</div></div>`).join("")
     : `<div class="note">まだありません。</div>`;
 }
 
@@ -925,7 +947,7 @@ async function checkFavUpdates(force){
 let recheckRunning = false;
 async function dailyRecheck(force){
   if(recheckRunning) return;
-  if(!cfg().vtKey){ $("favStatus").textContent = "VirusTotal APIキーを設定すると、毎日ウイルスの再確認ができます。"; return; }
+  if(!cfg().preCheck || !cfg().vtKey){ return; }
   if(!force && LS.get("recheckDay","") === jstDate()) return;
   const targets = new Map();
   for(const d of LS.get("downloads", [])) if(d.sha) targets.set(d.sha.replace(/^sha256:/,""), d.name);
@@ -984,8 +1006,8 @@ function openHelp(){
    <h3>ダウンロードしたファイルをMacに送る</h3>
    <ol class="steps"><li>「ダウンロード」を押すと、Safariが「ダウンロードしますか？」と聞くので「ダウンロード」を押す</li>
    <li>画面右上（または下）の「↓」マークから、ダウンロードしたファイルを長押しする</li>
-   <li>「移動」→「iCloud Drive」→ 好きなフォルダを選んで「移動」</li>
-   <li>家のMacでFinderを開き、左の「iCloud Drive」から同じフォルダを開く</li></ol>
+   <li>「移動」→「iCloud Drive」→「Git Getter」フォルダを選んで「移動」（Mac補助アプリが自動でウイルスチェックします）</li>
+   <li>Macに通知で結果が届きます。「安全」なら、Finderの「iCloud Drive」→「Git Getter」から開けます</li></ol>
    <div class="note">毎回iCloud Driveに保存したいときは、iPhoneの「設定」→「アプリ」→「Safari」→「ダウンロード」で保存先を「iCloud Drive」にできます。</div>
    <h3>お気に入りを共有する</h3>
    <ol class="steps"><li>片方の端末で「⭐ お気に入り」→「書き出す」</li><li>保存先に「iCloud Drive」を選ぶ</li><li>もう一方の端末で「読み込む」→ そのファイルを選ぶ</li></ol>
@@ -1024,6 +1046,7 @@ $("favCheck").onclick = async ()=>{ $("favCheck").disabled=true; $("favStatus").
 $("expBtn").onclick = exportData;
 $("impFile").onchange = e=>{ const f=e.target.files[0]; if(f) importData(f); e.target.value=""; };
 $("helpBtn").onclick = openHelp;
+$("helperCopy").onclick = async ()=>{ try{ await navigator.clipboard.writeText($("helperCmd").value); }catch(e){ $("helperCmd").select(); document.execCommand("copy"); } $("helperMsg").textContent = "✓ コピーしました。Macのターミナルに貼り付けてください。"; };
 renderUsage(); updateAiMode(); checkUpdate(false); renderNotices(); renderFavs();
 loadDangerList();
 (async ()=>{ await checkFavUpdates(false); await dailyRecheck(false); })();
