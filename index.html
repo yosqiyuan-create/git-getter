@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.5.2">
+<meta name="app-version" content="1.6.0">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -118,7 +118,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
         <button class="tab" data-t="genre">🏷 ジャンル</button>
         <button class="tab" data-t="kw">🔎 キーワード</button>
         <button class="tab" data-t="rank">🏆 ランキング</button>
-        <button class="tab" data-t="url">🔗 URL</button>
+        <button class="tab" data-t="url">🔗 リンク</button>
         <button class="tab" data-t="fav">⭐ お気に入り</button>
       </div>
 
@@ -146,7 +146,8 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
       </div>
 
       <div data-p="url" class="hidden">
-        <div class="row"><input type="text" id="urlText" placeholder="https://github.com/作者/アプリ名" style="flex:1"><button class="btn" id="urlGo">開く</button></div>
+        <div class="row"><input type="text" id="urlText" placeholder="GitHubや、アプリの紹介ページ・記事のリンク" style="flex:1"><button class="btn" id="urlGo">探す</button></div>
+        <div class="note" style="margin-top:6px">GitHubのリンクならそのアプリを開きます。それ以外のページなら、Geminiがページを読んで、書かれているGitHubのアプリや似たアプリを探します。</div>
       </div>
 
       <div data-p="fav" class="hidden">
@@ -218,7 +219,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.5.2";
+const APP_VERSION = "1.6.0";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -364,14 +365,22 @@ function gemErrJa(status, body){
   return "Geminiでエラーが起きました（番号 " + status + "）";
 }
 let gemLastError = "";
+let gemProgress = null;   // optional callback(text) to show what is being tried
+async function fetchT(url, opt, ms){
+  const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), ms);
+  try{ return await fetch(url, Object.assign({}, opt||{}, {signal: ctl.signal})); }
+  catch(e){ if(e.name === "AbortError"){ const err = new Error("TIMEOUT"); err.timeout = true; throw err; } throw e; }
+  finally{ clearTimeout(t); }
+}
 async function gemCandidates(){
   const c = cfg();
   if(c.gemModel) return [c.gemModel.trim().replace(/^models\//,"")];
   const cached = LS.get("gemAuto", null);
   if(cached && cached.day === utcDate() && cached.list && cached.list.length) return cached.list;
   let r;
-  try{ r = await fetch(`${GEM_BASE}/models?pageSize=1000&key=${encodeURIComponent(c.gemKey.trim())}`); }
-  catch(e){ const err = new Error(gemErrJa(0,"")); err.ja = true; throw err; }
+  if(gemProgress) gemProgress("使えるモデルを調べています");
+  try{ r = await fetchT(`${GEM_BASE}/models?pageSize=1000&key=${encodeURIComponent(c.gemKey.trim())}`, {}, 15000); }
+  catch(e){ const err = new Error(e.timeout ? "Geminiから返事がありませんでした（15秒）。ネット接続を確認してください" : gemErrJa(0,"")); err.ja = true; throw err; }
   const body = await r.text();
   if(!r.ok){ const err = new Error(gemErrJa(r.status, body)); err.ja = true; err.raw = body; throw err; }
   const j = JSON.parse(body);
@@ -394,22 +403,28 @@ function parseGemJson(txt){
   const m = t.match(/\{[\s\S]*\}/); if(m) return JSON.parse(m[0]);
   throw new Error("Geminiの返事を読み取れませんでした");
 }
-async function gemini(prompt){
+async function gemini(prompt, opts={}){
   if(!gemAvailable()) throw new Error("GEMINI_UNAVAILABLE");
   const c = cfg(); let cands;
   try{ cands = await gemCandidates(); }
   catch(e){ gemLastError = e.message; throw e; }
-  let lastStatus = 0, lastBody = "", all429 = true;
-  for(const model of cands.slice(0,8)){
-    for(const jsonMode of [true,false]){
+  let lastStatus = 0, lastBody = "", all429 = true, timeouts = 0;
+  const started = Date.now();
+  for(const model of cands.slice(0,6)){
+    if(Date.now() - started > 60000) break;   // never wait more than about a minute in total
+    for(const jsonMode of (opts.tools ? [false] : [true,false])){
       let r;
       const gc = jsonMode ? {responseMimeType:"application/json", temperature:0.3} : {temperature:0.3};
+      if(gemProgress) gemProgress(`${model} を試しています`);
       try{
-        r = await fetch(`${GEM_BASE}/models/${model}:generateContent?key=${encodeURIComponent(c.gemKey.trim())}`, {
+        r = await fetchT(`${GEM_BASE}/models/${model}:generateContent?key=${encodeURIComponent(c.gemKey.trim())}`, {
           method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({contents:[{role:"user",parts:[{text:prompt + (jsonMode?"":"\nReply with JSON only.")}]}], generationConfig:gc})
-        });
-      }catch(e){ gemLastError = gemErrJa(0,""); const err=new Error(gemLastError); err.ja=true; throw err; }
+          body: JSON.stringify(Object.assign({contents:[{role:"user",parts:[{text:prompt + (jsonMode?"":"\nReply with JSON only.")}]}], generationConfig:gc}, opts.tools ? {tools: opts.tools} : {}))
+        }, opts.tools ? 40000 : 25000);
+      }catch(e){
+        if(e.timeout){ timeouts++; lastStatus = -1; lastBody = ""; all429 = false; break; }   // too slow: try the next model
+        gemLastError = gemErrJa(0,""); const err=new Error(gemLastError); err.ja=true; throw err;
+      }
       const body = await r.text();
       if(r.ok){
         bump("gem", laDate()); gemLastError = "";
@@ -430,7 +445,7 @@ async function gemini(prompt){
     // 404 / unsupported / per-model quota / no free tier -> try the next model
   }
   if(lastStatus===429 && all429){ gemBlockedUntilDay = laDate(); LS.set("gemBlocked", gemBlockedUntilDay); renderUsage(); }
-  gemLastError = gemErrJa(lastStatus, lastBody);
+  gemLastError = lastStatus === -1 ? `Geminiの返事が遅すぎました（25秒以上）。少し時間をおいて試すか、設定のモデル名に別のモデルを入れてください` : gemErrJa(lastStatus, lastBody);
   const err = new Error(lastStatus===429 && all429 ? "GEMINI_LIMIT" : gemLastError); err.ja = true; err.raw = lastBody; throw err;
 }
 
@@ -672,8 +687,74 @@ function renderResults(){
   $("results").querySelectorAll(".result").forEach(el=>el.onclick=()=>{ const r=lastResults[+el.dataset.i]; openRepo(r.owner.login, r.name); });
 }
 
+/* ===== Link search ===== */
+const URL_RE = /https?:\/\/[^\s<>"'）」]+/gi;
+function githubRepos(text){
+  const out = []; let m; const re = /github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)/gi;
+  const skip = /^(features|topics|orgs|sponsors|marketplace|settings|apps|about|pricing|login|search|trending|collections|enterprise)$/i;
+  while((m = re.exec(text))){
+    const owner = m[1], name = m[2].replace(/\.git$/,"");
+    if(skip.test(owner)) continue;
+    const full = `${owner}/${name}`;
+    if(!out.some(x=>x.toLowerCase()===full.toLowerCase())) out.push(full);
+  }
+  return out;
+}
+function urlWords(url){
+  try{
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\.|^m\./,"").split(".").filter(w=>!/^(com|net|org|co|jp|io|app|dev|html?|www)$/i.test(w));
+    const path = decodeURIComponent(u.pathname).split(/[\/\-_.+%]+/).filter(w=>w && !/^\d+$/.test(w) && !/^(index|html?|php|p|post|posts|article|articles|entry|blog|news|ja|en|amp)$/i.test(w));
+    return [...host.slice(0,1), ...path.slice(-4)].join(" ");
+  }catch(e){ return ""; }
+}
+async function openRepoList(names, label){
+  showSearch(); status(`<span class="spin"></span> ${esc(label)}`); $("resultsCard").classList.add("hidden");
+  try{
+    const repos = (await Promise.all(names.slice(0,12).map(n=>{ const [o,r]=n.split("/"); return gh(`/repos/${o}/${r}`).catch(()=>null); }))).filter(Boolean);
+    if(!repos.length){ status("ページに書かれていたGitHubのアプリは、見つかりませんでした（削除された可能性があります）。","warn"); return false; }
+    lastResults = repos.map(r=>Object.assign(r,{_score:scoreRepo(r)}));
+    renderResults(); status(`${esc(label)}：${lastResults.length}件`);
+    if(cfg().trans && gemAvailable()) translateResults();
+    return true;
+  }catch(e){ status(esc(e.message),"err"); return false; }
+}
+async function handleLinks(text){
+  const urls = (text.match(URL_RE)||[]).map(u=>u.replace(/[).,、。]+$/,""));
+  if(!urls.length) return false;
+  const gh1 = githubRepos(text);
+  if(gh1.length === 1 && urls.length === 1){ const [o,n] = gh1[0].split("/"); openRepo(o,n); return true; }
+  if(gh1.length >= 1 && urls.every(u=>/github\.com/i.test(u))){ await openRepoList(gh1, "貼ったリンクのアプリ"); return true; }
+  const page = urls.find(u=>!/github\.com/i.test(u));
+  showSearch();
+  if(gemAvailable()){
+    status(`<span class="spin"></span> Geminiがページを読んでいます…（最大40秒ほど）`); $("resultsCard").classList.add("hidden");
+    try{
+      const out = await gemini(`Read this web page: ${page}
+It is probably about an app, a tool or a piece of software. Return only JSON:
+{"repos": ["owner/repo" for every GitHub repository linked or named on the page, max 10],
+ "queries": [1 or 2 English GitHub search queries (1-4 plain keywords each) to find this app or apps that do the same thing],
+ "summary_ja": "one short Japanese sentence: what the page is about"}`, {tools:[{url_context:{}}]});
+      const repos = (out.repos||[]).map(x=>String(x).replace(/^https?:\/\/github\.com\//i,"").replace(/\/$/,"")).filter(x=>/^[\w.-]+\/[\w.-]+$/.test(x));
+      const about = out.summary_ja ? `「${out.summary_ja}」` : "";
+      if(repos.length && await openRepoList([...new Set([...gh1, ...repos])], `ページに書かれていたGitHubのアプリ ${about}`)) return true;
+      const qs = (out.queries||[]).filter(Boolean);
+      if(qs.length){ await runSearch(qs, `ページの内容から似たアプリを検索 ${about}`); return true; }
+    }catch(e){
+      status(`Geminiでページを読めませんでした（${esc(e.message==="GEMINI_LIMIT"?"今日の上限":e.message)}）。リンクの文字から探します。`,"warn");
+    }
+  }
+  if(gh1.length && await openRepoList(gh1, "貼った文章の中のGitHubのアプリ")) return true;
+  const w = urlWords(page);
+  if(!w){ status("このリンクからは探す言葉を取り出せませんでした。キーワードで探してみてください。","warn"); return true; }
+  const q = jaToEn(w);
+  await runSearch([q], `リンクの文字「${w}」から検索`);
+  return true;
+}
+
 async function aiSearch(){
   const text = $("aiText").value.trim(); if(!text) return;
+  if(await handleLinks(text)) return;
   if(gemAvailable()){
     status(`<span class="spin"></span> Geminiが探し方を考えています…`); showSearch();
     try{
@@ -956,14 +1037,14 @@ $("tabs").querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
 $("genres").innerHTML = GENRES.map((g,i)=>`<button class="genre" data-g="${i}">${esc(g[0])}</button>`).join("");
 $("genres").querySelectorAll(".genre").forEach(b=>b.onclick=()=>{ const g=GENRES[+b.dataset.g]; runSearch([g[1]], `ジャンル「${g[0]}」`); });
 $("aiGo").onclick = aiSearch;
-$("kwGo").onclick = ()=>{ const t=$("kwText").value.trim(); if(!t) return; const q=jaToEn(t); runSearch([q], `「${t}」（${q}）`); };
+$("kwGo").onclick = async ()=>{ const t=$("kwText").value.trim(); if(!t) return; if(await handleLinks(t)) return; const q=jaToEn(t); runSearch([q], `「${t}」（${q}）`); };
 $("kwText").onkeydown = e=>{ if(e.key==="Enter") $("kwGo").click(); };
 $("rankNew").onclick = ()=>{ const d=new Date(Date.now()-60*86400000).toISOString().slice(0,10); runSearch([`created:>${d} stars:>50`], "最近人気が出ているもの（60日以内に公開）"); };
 $("rankAll").onclick = ()=> runSearch(["stars:>20000"], "ずっと人気のもの");
-$("urlGo").onclick = ()=>{
-  const m = $("urlText").value.trim().match(/github\.com\/([^\/\s#?]+)\/([^\/\s#?]+)/i);
-  if(!m){ status("GitHubのURLを貼ってください（例：https://github.com/作者/アプリ名）","warn"); return; }
-  openRepo(m[1], m[2].replace(/\.git$/,""));
+$("urlGo").onclick = async ()=>{
+  let t = $("urlText").value.trim(); if(!t) return;
+  if(!/https?:\/\//i.test(t) && /^[\w-]+(\.[\w-]+)+/.test(t)) t = "https://" + t;   // allow links without https://
+  if(!(await handleLinks(t))) status("リンク（https:// で始まる文字）を貼ってください。","warn");
 };
 $("urlText").onkeydown = e=>{ if(e.key==="Enter") $("urlGo").click(); };
 $("backBtn").onclick = showSearch;
@@ -975,14 +1056,17 @@ $("gemTest").onclick = async ()=>{
   if(!key){ msg.textContent = "先にGemini APIキーを入れてください"; return; }
   const c = cfg(); c.gemKey = key; c.gemModel = $("sGemModel").value.trim(); LS.set("cfg", c);
   LS.set("gemAuto", null); gemBlockedUntilDay = ""; LS.set("gemBlocked","");
-  msg.innerHTML = `<span class="spin"></span> テスト中…`;
+  const t0 = Date.now(); let cur = "準備しています";
+  const tick = ()=>{ msg.innerHTML = `<span class="spin"></span> ${esc(cur)}…（${Math.floor((Date.now()-t0)/1000)}秒）`; };
+  gemProgress = txt=>{ cur = txt; tick(); }; tick();
+  const timer = setInterval(tick, 1000);
   try{
     const out = await gemini('Return only this JSON: {"ok": "つながりました"}');
     msg.textContent = `✓ ${out.ok||"つながりました"}（使ったモデル：${out._model}）`;
   }catch(e){
     msg.textContent = "✕ " + (e.message==="GEMINI_LIMIT" ? "Geminiの回数上限に達しています（どのモデルも使えませんでした）" : e.message);
     if(e.raw) console.log(e.raw);
-  }
+  }finally{ clearInterval(timer); gemProgress = null; }
   renderUsage(); updateAiMode();
 };
 [$("setModal"),$("dlModal")].forEach(m=>m.addEventListener("click",e=>{ if(e.target===m) m.classList.remove("on"); }));

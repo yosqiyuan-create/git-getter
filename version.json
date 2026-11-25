@@ -1,7 +1,7 @@
 {
  "id": "git-getter",
  "name": "Git Getter",
- "version": "1.5.2",
+ "version": "1.6.0",
  "date": "2026-11-25",
- "notes": "翻訳できないときに理由を表示、Gemini接続テストを追加、使えるモデルを自動で探すように改善"
+ "notes": "リンクを貼って探せるように（GitHub以外の紹介ページや記事もOK）"
 }
