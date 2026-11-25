@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.6.1">
+<meta name="app-version" content="1.6.2">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -103,6 +103,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
   <div class="hrow2">
     <div class="usage" id="usage"></div>
     <span class="spacer"></span>
+    <button class="hbtn bell" id="favBtn" title="お気に入り">⭐<b id="favCnt" class="hidden"></b></button>
     <button class="hbtn bell" id="bellBtn">🔔<b id="bellCnt" class="hidden"></b></button>
     <button class="hbtn" id="setBtn">⚙ 設定</button>
   </div>
@@ -219,7 +220,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.6.1";
+const APP_VERSION = "1.6.2";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -949,6 +950,8 @@ function markFavSeen(full, tag){
 }
 function renderFavs(){
   const l = favs();
+  const nNew = l.filter(f=>f.newTag).length; const fc = $("favCnt");
+  if(fc){ fc.textContent = nNew; fc.classList.toggle("hidden", !nNew); }
   $("favList").innerHTML = l.length ? l.map((f,i)=>`<div class="fav">
      <a href="#" class="rname" data-f="${i}">${esc(f.full)}</a> ${f.newTag?`<span class="newtag">新しい版 ${esc(f.newTag)}</span>`:""}
      <div class="note">${esc(f.desc||"")}</div>
@@ -1076,6 +1079,11 @@ $("gemTest").onclick = async ()=>{
 };
 [$("setModal"),$("dlModal")].forEach(m=>m.addEventListener("click",e=>{ if(e.target===m) m.classList.remove("on"); }));
 $("bellBtn").onclick = openNotices;
+$("favBtn").onclick = ()=>{
+  showSearch();
+  const t = $("tabs").querySelector('[data-t="fav"]'); t.click();
+  t.scrollIntoView({block:"nearest", inline:"end"}); window.scrollTo({top:0, behavior:"smooth"});
+};
 $("favCheck").onclick = async ()=>{ $("favCheck").disabled=true; $("favStatus").textContent="新しい版を確認中…"; const n = await checkFavUpdates(true); $("favStatus").textContent = n?`新しい版が${n}件見つかりました。`:"新しい版はありませんでした。"; $("favCheck").disabled=false; };
 $("expBtn").onclick = exportData;
 $("impFile").onchange = e=>{ const f=e.target.files[0]; if(f) importData(f); e.target.value=""; };

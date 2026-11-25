@@ -1,7 +1,7 @@
 {
  "id": "git-getter",
  "name": "Git Getter",
- "version": "1.6.1",
+ "version": "1.6.2",
  "date": "2026-11-25",
- "notes": "ダウンロードしたファイルの名前と保存場所を表示"
+ "notes": "画面の上に⭐お気に入りボタンを追加"
 }
