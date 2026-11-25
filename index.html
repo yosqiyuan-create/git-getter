@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.4.0">
+<meta name="app-version" content="1.5.0">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -202,10 +202,6 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
   <div class="field"><label>1日の上限回数（Google AI Studioで確認した数字）</label><input type="number" id="sGemLimit" min="1"></div>
   <div class="field"><label>この端末で使う割合（%）MacとiPhoneで分けるとき用。例：50</label><input type="number" id="sGemShare" min="1" max="100"></div>
   <div class="field"><label><input type="checkbox" id="sTrans"> 検索結果の説明文を自動で日本語に訳す（1回の検索でGeminiを1回多く使います）</label></div>
-  <h3>Mac補助アプリ（Macでの解凍・インストール）</h3>
-  <div class="note">Macの「ターミナル」に下の1行を貼り付けてEnterを押すと、自動でインストールされます。</div>
-  <textarea id="helperCmd" readonly style="min-height:64px;font-size:12px;margin-top:6px"></textarea>
-  <div class="row" style="margin-top:6px"><button class="btn sub" id="helperCopy">コピーする</button><span class="note" id="helperMsg"></span></div>
   <h3>GitHub</h3>
   <div class="field"><label>GitHubトークン（任意・入れると回数制限が増えます）</label><input type="password" id="sGhToken" autocomplete="off"></div>
   <h3>警告</h3>
@@ -221,7 +217,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.5.0";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -491,7 +487,7 @@ function readmeExcerpt(md){
 const TARGETS = {
   web: ["iPhoneとMacで使えるWebアプリ", "A web app (a single index.html) that works in Safari on iPhone and on Mac."],
   mac: ["Macアプリ", "A Mac app for my Mac mini (Apple silicon M2, 16GB). Give me a paste-and-run setup script that needs no manual configuration."],
-  both:["Webアプリ＋Mac補助", "A web app for iPhone and Mac, plus a small Mac helper only for the parts a browser cannot do."]
+  both:["Webアプリ＋Macの小さな補助プログラム", "A web app for iPhone and Mac, plus a small Mac helper only for the parts a browser cannot do."]
 };
 function buildRemakeMemo(opt){
   const {repo, rel, readme, langs} = current;
@@ -741,14 +737,8 @@ function directDownload(a){
   document.body.appendChild(link); link.click(); link.remove();
   recordDownload(a);
   const box = document.createElement("div"); box.className = "msg info";
-  box.textContent = `「${a.name}」をダウンロードしました。iPhoneでは保存先を「iCloud Drive」の「Git Getter」フォルダにすると、Mac補助アプリが解凍・インストールを手伝います。`;
+  box.textContent = `「${a.name}」をダウンロードしました。iPhoneでは保存先を「iCloud Drive」にすると、家のMacでも開けます。`;
   $("detail").prepend(box); window.scrollTo({top:0, behavior:"smooth"});
-}
-function helperBase(){ return location.origin + location.pathname.replace(/[^\/]*$/,"").replace(/\/$/,""); }
-function renderHelperCmd(){
-  if(location.protocol === "file:"){ $("helperCmd").value = "GitHubに置いたGit Getterから開くと、ここにインストール用の1行が出ます。"; $("helperCopy").disabled = true; return; }
-  const base = helperBase();
-  $("helperCmd").value = `curl -fsSL "${base}/helper/install.sh" | GG_BASE="${base}" bash`;
 }
 
 /* ===== App update (compares with version.json on the same site) ===== */
@@ -772,7 +762,7 @@ async function checkUpdate(manual){
 function openSettings(){
   const c = cfg();
   $("sGemKey").value=c.gemKey; $("sGemModel").value=c.gemModel; $("sGemLimit").value=c.gemLimit; $("sGemShare").value=c.gemShare;
-  $("sTrans").checked=c.trans; renderHelperCmd(); checkUpdate(false); $("sGhToken").value=c.ghToken; $("sWarn").value=c.warn; $("updMsg").textContent="";
+  $("sTrans").checked=c.trans; checkUpdate(false); $("sGhToken").value=c.ghToken; $("sWarn").value=c.warn; $("updMsg").textContent="";
   $("setModal").classList.add("on");
 }
 function saveSettings(){
@@ -897,8 +887,8 @@ function openHelp(){
    <h3>ダウンロードしたファイルをMacに送る</h3>
    <ol class="steps"><li>「ダウンロード」を押すと、Safariが「ダウンロードしますか？」と聞くので「ダウンロード」を押す</li>
    <li>画面右上（または下）の「↓」マークから、ダウンロードしたファイルを長押しする</li>
-   <li>「移動」→「iCloud Drive」→「Git Getter」フォルダを選んで「移動」（Mac補助アプリが解凍・インストールを手伝います）</li>
-   <li>Macに「届きました」の通知が出て、解凍・インストールするか聞かれます。Finderの「iCloud Drive」→「Git Getter」からも開けます</li></ol>
+   <li>「移動」→「iCloud Drive」→ 好きなフォルダを選んで「移動」</li>
+   <li>家のMacでFinderを開き、左の「iCloud Drive」から同じフォルダを開く</li></ol>
    <div class="note">毎回iCloud Driveに保存したいときは、iPhoneの「設定」→「アプリ」→「Safari」→「ダウンロード」で保存先を「iCloud Drive」にできます。</div>
    <h3>お気に入りを共有する</h3>
    <ol class="steps"><li>片方の端末で「⭐ お気に入り」→「書き出す」</li><li>保存先に「iCloud Drive」を選ぶ</li><li>もう一方の端末で「読み込む」→ そのファイルを選ぶ</li></ol>
@@ -937,7 +927,6 @@ $("favCheck").onclick = async ()=>{ $("favCheck").disabled=true; $("favStatus").
 $("expBtn").onclick = exportData;
 $("impFile").onchange = e=>{ const f=e.target.files[0]; if(f) importData(f); e.target.value=""; };
 $("helpBtn").onclick = openHelp;
-$("helperCopy").onclick = async ()=>{ try{ await navigator.clipboard.writeText($("helperCmd").value); }catch(e){ $("helperCmd").select(); document.execCommand("copy"); } $("helperMsg").textContent = "✓ コピーしました。Macのターミナルに貼り付けてください。"; };
 renderUsage(); updateAiMode(); checkUpdate(false); renderNotices(); renderFavs();
 loadDangerList();
 checkFavUpdates(false);
