@@ -14,7 +14,7 @@ if [ "$(uname)" != "Darwin" ]; then echo "このインストーラーはMac専�
 mkdir -p "$DIR" "$HOME/Library/LaunchAgents"
 
 # 1. Download the helper program
-say "1/5 プログラムを取り込んでいます…"
+say "1/4 プログラムを取り込んでいます…"
 if [ -n "$BASE" ]; then
   if ! curl -fsSL "$BASE/helper/gitgetter_helper.py" -o "$DIR/gitgetter_helper.py.new"; then
     echo "ダウンロードできませんでした。インターネット接続を確認してください。"; exit 1
@@ -28,7 +28,7 @@ else
 fi
 
 # 2. Python
-say "2/5 Pythonを確認しています…"
+say "2/4 Pythonを確認しています…"
 if ! command -v python3 >/dev/null 2>&1; then
   echo "Python 3 がありません。表示される画面で「インストール」を押し、終わったらもう一度この1行を実行してください。"
   xcode-select --install 2>/dev/null
@@ -37,46 +37,21 @@ fi
 PY="$(python3 -c 'import sys; print(sys.executable)')"
 echo "使うPython：$PY"
 
-# 3. ClamAV (free antivirus) via Homebrew
-say "3/5 無料のウイルス対策ソフト（ClamAV）を準備しています…"
-BREW=""
-for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do [ -x "$b" ] && BREW="$b" && break; done
-CLAM=""
-for c in /opt/homebrew/bin/clamscan /usr/local/bin/clamscan "$(command -v clamscan 2>/dev/null)"; do [ -n "$c" ] && [ -x "$c" ] && CLAM="$c" && break; done
-if [ -z "$CLAM" ]; then
-  if [ -n "$BREW" ]; then
-    "$BREW" install clamav && CLAM="$("$BREW" --prefix)/bin/clamscan"
-  else
-    echo "Homebrew が入っていないため、ClamAV を入れられませんでした。"
-    echo "Homebrew（https://brew.sh）を入れてから、もう一度この1行を実行すると ClamAV も入ります。"
-    echo "（ClamAV なしでも、VirusTotal のキーがあればチェックは動きます）"
-  fi
-fi
-if [ -n "$CLAM" ] && [ -x "$CLAM" ]; then
-  ETC="$(cd "$(dirname "$CLAM")/../etc/clamav" 2>/dev/null && pwd)"
-  if [ -n "$ETC" ] && [ ! -f "$ETC/freshclam.conf" ] && [ -f "$ETC/freshclam.conf.sample" ]; then
-    sed -e 's/^Example/#Example/' "$ETC/freshclam.conf.sample" > "$ETC/freshclam.conf"
-  fi
-  echo "ウイルス情報を最新にしています（初回は数分かかります）…"
-  "$(dirname "$CLAM")/freshclam" --quiet || echo "（ウイルス情報の更新は、あとで自動で行います）"
-fi
-
-# 4. Settings (VirusTotal key is optional)
-say "4/5 設定"
+# 3. Folders and settings
+say "3/4 フォルダと設定を用意しています…"
 ICLOUD="$HOME/Library/Mobile Documents/com~apple~CloudDocs"
-[ -d "$ICLOUD" ] && mkdir -p "$ICLOUD/Git Getter" && echo "iCloud Drive に「Git Getter」フォルダを用意しました。"
+if [ -d "$ICLOUD" ]; then
+  mkdir -p "$ICLOUD/Git Getter" && echo "iCloud Drive に「Git Getter」フォルダを用意しました。"
+else
+  echo "iCloud Drive が見つかりません（「ダウンロード」フォルダだけを見張ります）。"
+fi
 if [ ! -f "$DIR/config.json" ]; then
-  VTK=""
-  if [ -r /dev/tty ]; then
-    printf "VirusTotal APIキーがあれば貼り付けてEnter（なければそのままEnter）: "
-    read -r VTK < /dev/tty || VTK=""
-  fi
-  "$PY" - "$DIR/config.json" "$VTK" <<'PYEOF'
+  "$PY" - "$DIR/config.json" <<'PYEOF'
 import json, os, sys
 home = os.path.expanduser("~")
 icloud = os.path.join(home, "Library", "Mobile Documents", "com~apple~CloudDocs", "Git Getter")
-cfg = {"vt_key": sys.argv[2].strip(), "watch": [os.path.join(home, "Downloads"), icloud],
-       "auto_unzip": True, "ask_install": True, "poll_seconds": 10}
+cfg = {"watch": [icloud, os.path.join(home, "Downloads")], "ask_first": True,
+       "delete_after_install": False, "poll_seconds": 10}
 json.dump(cfg, open(sys.argv[1], "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 PYEOF
   echo "設定を保存しました：$DIR/config.json"
@@ -84,8 +59,8 @@ else
   echo "前の設定をそのまま使います：$DIR/config.json"
 fi
 
-# 5. Start automatically at login (LaunchAgent)
-say "5/5 Macの起動時に自動で動くようにしています…"
+# 4. Start automatically at login (LaunchAgent)
+say "4/4 Macの起動時に自動で動くようにしています…"
 cat > "$PLIST" <<PLISTEOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -113,7 +88,7 @@ cat <<EOF
 許可したあと、ターミナルで次の1行を実行すると、補助アプリが再起動します：
        launchctl kickstart -k gui/$(id -u)/$LABEL
 
-結果の記録：$DIR/log.txt
+記録：$DIR/log.txt
 アンインストール：bash "$DIR/uninstall.sh"
 EOF
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles" 2>/dev/null

@@ -3,7 +3,7 @@
  "note": "Danger-sign patterns checked against README text. Edit and re-upload to update all devices.",
  "patterns": [
   {"re": "\\b(free|full)\\s+(premium|pro)\\s+(unlocked|crack)", "flags": "i", "msg": "「有料版が無料で使える」とうたっています"},
-  {"re": "\\b(roblox|fortnite|valorant|cs2|minecraft)\\b[^\\n]{0,40}\\b(executor|cheat|hack|injector|aimbot)\\b", "flags": "i", "msg": "ゲームのチート・不正ツールです（ウイルスが多い分野）"},
+  {"re": "\\b(roblox|fortnite|valorant|cs2|minecraft)\\b[^\\n]{0,40}\\b(executor|cheat|hack|injector|aimbot)\\b", "flags": "i", "msg": "ゲームのチート・不正ツールです（危険なツールが多い分野）"},
   {"re": "\\b(wallet\\s+drainer|seed\\s+phrase\\s+(finder|recover)|crypto\\s+(miner|stealer))\\b", "flags": "i", "msg": "暗号資産を盗む・勝手に採掘するタイプのツールの可能性"},
   {"re": "\\b(token\\s+grabber|password\\s+stealer|rat\\s+builder|keylogger)\\b", "flags": "i", "msg": "情報を盗むためのツールの可能性"},
   {"re": "\\bdownload\\b[^\\n]{0,30}\\b(setup|installer)\\.(exe|zip|rar)\\b[^\\n]{0,40}(releases?\\s+below|link\\s+below)", "flags": "i", "msg": "説明文で外部のインストーラーへ誘導する典型的な手口です"}
