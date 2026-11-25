@@ -1,7 +1,7 @@
 {
  "id": "git-getter",
  "name": "Git Getter",
- "version": "1.5.0",
+ "version": "1.5.2",
  "date": "2026-11-25",
- "notes": "Mac補助アプリを削除"
+ "notes": "翻訳できないときに理由を表示、Gemini接続テストを追加、使えるモデルを自動で探すように改善"
 }
