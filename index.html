@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.6.3">
+<meta name="app-version" content="1.7.0">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -221,7 +221,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.6.3";
+const APP_VERSION = "1.7.0";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -641,29 +641,37 @@ function buildQuery(base){
   if($("fRecent").checked){ const d=new Date(Date.now()-365*86400000).toISOString().slice(0,10); q += " pushed:>"+d; }
   return q.trim();
 }
-async function runSearch(queries, label){
-  showSearch(); status(`<span class="spin"></span> ${esc(label)}`); $("resultsCard").classList.add("hidden");
+const PER_PAGE = 50;          // GitHub allows up to 100 per page and 1,000 results per search
+let searchState = null;      // {queries, label, page, total, sort, seenIds}
+async function runSearch(queries, label, more=false){
+  if(!more){
+    showSearch(); status(`<span class="spin"></span> ${esc(label)}`); $("resultsCard").classList.add("hidden");
+    searchState = {queries: queries.slice(0,2).map(buildQuery).filter(Boolean), label, page:0, total:0, sort:$("fSort").value, seenIds:new Set()};
+    lastResults = [];
+  }
+  const st = searchState; if(!st) return;
+  st.page++;
   try{
-    const sort = $("fSort").value;
-    const seen = new Map();
-    for(const q0 of queries.slice(0,2)){
-      const q = buildQuery(q0); if(!q) continue;
-      const j = await gh(`/search/repositories?q=${encodeURIComponent(q)}&sort=${sort}&order=desc&per_page=20`);
-      for(const it of (j?.items||[])) if(!seen.has(it.id)) seen.set(it.id, it);
+    const sort = st.sort; const fresh = []; let total = 0;
+    for(const q of st.queries){
+      const j = await gh(`/search/repositories?q=${encodeURIComponent(q)}&sort=${sort}&order=desc&per_page=${PER_PAGE}&page=${st.page}`);
+      total += (j?.total_count||0);
+      for(const it of (j?.items||[])) if(!st.seenIds.has(it.id)){ st.seenIds.add(it.id); fresh.push(it); }
     }
-    let items = [...seen.values()];
-    items.sort((a,b)=> sort==="updated" ? new Date(b.pushed_at)-new Date(a.pushed_at) : b.stargazers_count-a.stargazers_count);
-    items = items.map(r => Object.assign(r, {_score: scoreRepo(r)}));
+    total = Math.max(total, st.seenIds.size); st.total = total;
+    fresh.sort((a,b)=> sort==="updated" ? new Date(b.pushed_at)-new Date(a.pushed_at) : b.stargazers_count-a.stargazers_count);
+    let items = fresh.map(r => Object.assign(r, {_score: scoreRepo(r)}));
     if($("fGreen").checked) items = items.filter(r=>r._score.lv==="green");
-    lastResults = items.slice(0,25);
+    lastResults = lastResults.concat(items);
+    st.hasMore = st.page * PER_PAGE < Math.min(total, 1000) && fresh.length > 0;
     renderResults();
-    if(!lastResults.length){ status("見つかりませんでした。言葉を変えるか、絞り込みを外してみてください。","warn"); return; }
-    status(`${esc(label)}：${lastResults.length}件見つかりました。`);
+    if(!lastResults.length && !st.hasMore){ status("見つかりませんでした。言葉を変えるか、絞り込みを外してみてください。","warn"); return; }
+    status(`${esc(st.label)}：全${total.toLocaleString()}件のうち ${lastResults.length}件を表示しています。`);
     if(cfg().trans && gemAvailable()) translateResults();
-  }catch(e){ status(esc(e.message),"err"); }
+  }catch(e){ st.page--; status(esc(e.message),"err"); if(more) renderResults(); }
 }
 async function translateResults(){
-  const map = {}; lastResults.forEach(r=>{ if(r.description) map[r.id]=r.description.slice(0,300); });
+  const map = {}; lastResults.filter(r=>r.description && !r._ja).slice(0,50).forEach(r=>{ map[r.id]=r.description.slice(0,300); });
   if(!Object.keys(map).length) return;
   try{
     const out = await gemini(`Translate each GitHub repository description into short, natural, easy Japanese (max 60 Japanese characters each). Return only a JSON object that maps each id (as a string) to its Japanese text.\nInput:\n${JSON.stringify(map)}`);
@@ -686,6 +694,11 @@ function renderResults(){
       <div class="meta">${badge(r._score.lv)}<span>★ ${r.stargazers_count.toLocaleString()}</span><span>更新 ${fmtDate(r.pushed_at)}</span>${r.language?`<span>${esc(r.language)}</span>`:""}<span class="badge b-${ll}">${esc(lt.split("（")[0])}</span></div>
     </div>`;
   }).join("");
+  if(searchState && searchState.hasMore){
+    $("results").insertAdjacentHTML("beforeend", `<div style="padding:14px;text-align:center"><button class="btn" id="moreBtn">もっと見る（次の${PER_PAGE}件）</button>
+      <div class="note" style="margin-top:6px">全${searchState.total.toLocaleString()}件中 ${lastResults.length}件を表示中${searchState.total>1000?"（GitHubの決まりで、見られるのは上位1,000件まで。もっと絞りたいときは言葉を足してください）":""}</div></div>`);
+    $("moreBtn").onclick = ()=>{ $("moreBtn").disabled = true; $("moreBtn").innerHTML = `<span class="spin"></span> 読み込み中…`; runSearch(null, null, true); };
+  }
   $("results").querySelectorAll(".result").forEach(el=>el.onclick=()=>{ const r=lastResults[+el.dataset.i]; openRepo(r.owner.login, r.name); });
 }
 
@@ -715,6 +728,7 @@ async function openRepoList(names, label){
   try{
     const repos = (await Promise.all(names.slice(0,12).map(n=>{ const [o,r]=n.split("/"); return gh(`/repos/${o}/${r}`).catch(()=>null); }))).filter(Boolean);
     if(!repos.length){ status("ページに書かれていたGitHubのアプリは、見つかりませんでした（削除された可能性があります）。","warn"); return false; }
+    searchState = null;
     lastResults = repos.map(r=>Object.assign(r,{_score:scoreRepo(r)}));
     renderResults(); status(`${esc(label)}：${lastResults.length}件`);
     if(cfg().trans && gemAvailable()) translateResults();
