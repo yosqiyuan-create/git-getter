@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.8.0">
+<meta name="app-version" content="1.8.1">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -85,6 +85,8 @@ h2{font-size:18px;margin:0 0 8px}h3{font-size:15px;margin:14px 0 6px}
 .notice .nx{margin-left:auto;background:none;border:none;font-size:16px;cursor:pointer;color:var(--sub)}
 .fav{padding:10px 0;border-bottom:1px solid var(--line)}
 .fav:last-child{border-bottom:none}
+.dlmark{background:#dff3e6;color:#16673a;font-size:12px;font-weight:700;padding:1px 8px;border-radius:10px;white-space:nowrap}
+.dlbox{background:#e5f6ec;border:1px solid #b9e3c8;border-radius:8px;padding:8px 12px;margin-top:10px;font-size:14px}
 .newtag{background:#ffcc33;color:#3a2a00;font-size:12px;font-weight:700;padding:1px 8px;border-radius:10px}
 .bell{position:relative}.bell b{position:absolute;top:-6px;right:-6px;background:#ff6b6b;color:#fff;font-size:11px;border-radius:9px;padding:0 5px}
 ol.steps{padding-left:22px;font-size:15px}ol.steps li{margin:4px 0}
@@ -233,7 +235,7 @@ pre.manual{white-space:pre-wrap;font-family:inherit;font-size:14px;background:#f
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.8.0";
+const APP_VERSION = "1.8.1";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -616,7 +618,7 @@ function renderResults(){
     const [ll,lt] = licenseJa(r.license);
     return `<div class="result" data-i="${i}">
       <div class="rname">${esc(r.full_name)}</div>
-      ${ja}<div class="rdesc">${esc(r.description||"（説明なし）")}</div>
+      ${dlMark(r.full_name)}${ja}<div class="rdesc">${esc(r.description||"（説明なし）")}</div>
       <div class="meta">${badge(r._score.lv)}<span>★ ${r.stargazers_count.toLocaleString()}</span><span>更新 ${fmtDate(r.pushed_at)}</span>${r.language?`<span>${esc(r.language)}</span>`:""}<span class="badge b-${ll}">${esc(lt.split("（")[0])}</span></div>
     </div>`;
   }).join("");
@@ -765,6 +767,7 @@ function renderDetail(){
       <a class="btn sub" href="${esc(repo.html_url)}" target="_blank" rel="noopener">GitHubで見る</a>
       <button class="star ${isFav(repo.full_name)?"on":""}" id="starBtn">${isFav(repo.full_name)?"★ お気に入り済み":"☆ お気に入りに追加"}</button></div>
     <div class="meta" style="margin-top:10px"><span>★ ${repo.stargazers_count.toLocaleString()}</span><span>作者 ${esc(repo.owner.login)}</span><span>作成 ${fmtDate(repo.created_at)}</span><span>更新 ${fmtDate(repo.pushed_at)}</span></div>
+    ${dlBox(repo.full_name)}
   </div>
   <div class="card">
     <h3 style="margin-top:0">安全度</h3>${badge(sc.lv)}
@@ -776,11 +779,11 @@ function renderDetail(){
   <div class="card">
     <h3 style="margin-top:0">ダウンロード${rel?`（最新版 ${esc(rel.tag_name)}・${fmtDate(rel.published_at)}）`:""}</h3>
     ${assets.length ? assets.map((a,i)=>`<div class="asset"><span class="ostag ${a._os==="mac"?"mac":""}">${OS_JA[a._os]}</span>
-      <span class="an">${esc(a.name)} <span class="note">${fmtSize(a.size)}・${(a.download_count||0).toLocaleString()}回</span></span>
-      <button class="btn ${a._os==="mac"?"":"sub"}" data-a="${i}">ダウンロード</button></div>`).join("")
+      <span class="an">${esc(a.name)} ${fileMark(repo.full_name, a.name)}<span class="note">${fmtSize(a.size)}・${(a.download_count||0).toLocaleString()}回</span></span>
+      <button class="btn ${a._os==="mac"?"":"sub"}" data-a="${i}">${dlFor(repo.full_name, a.name).length?"もう一度":"ダウンロード"}</button></div>`).join("")
       : `<div class="note">完成品（配布ファイル）はありません。</div>`}
-    <div class="asset"><span class="ostag">ソース</span><span class="an">ソースコード一式（アプリの設計図）<br><span class="note">保存される名前：${esc(zipName)}</span></span>
-      <button class="btn sub" id="zipBtn">ダウンロード</button></div>
+    <div class="asset"><span class="ostag">ソース</span><span class="an">ソースコード一式（アプリの設計図） ${fileMark(repo.full_name, zipName)}<br><span class="note">保存される名前：${esc(zipName)}</span></span>
+      <button class="btn sub" id="zipBtn">${dlFor(repo.full_name, zipName).length?"もう一度":"ダウンロード"}</button></div>
     <div class="note" style="margin-top:8px">iPhoneでは保存先に「iCloud Drive」を選ぶと、家のMacに自動で同期されます。<a href="#" id="helpLink">保存のしかた</a></div>
   </div>`;
   $("detail").querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>openDlPrep(current.assets[+b.dataset.a]));
@@ -968,6 +971,96 @@ function manualFailText(repo, e){
   return `説明書は生成できませんでした。\n理由：${why}\nリポジトリ：${repo.html_url}\n（元の説明はGitHubのページで見られます）\n`;
 }
 
+/* ---- "Already downloaded" marks ---- */
+const dlOf = full => LS.get("downloads", []).filter(x=>x.repo===full);
+const sameFile = (x, fname) => (x.file || x.name) === fname || String(x.name||"").endsWith("] " + fname);
+const dlFor = (full, fname) => dlOf(full).filter(x=>sameFile(x, fname));
+const mmdd = at => at ? jstStamp(new Date(at)).slice(5,10).replace("-","/") : "";
+function dlMark(full, inline){
+  const l = dlOf(full); if(!l.length) return "";
+  const m = `<span class="dlmark">✅ ダウンロード済み ${esc(mmdd(l[0].at))}${l.length>1?`（${l.length}回）`:""}</span>`;
+  return inline ? m : `<div style="margin:3px 0">${m}</div>`;
+}
+function fileMark(full, fname){
+  const l = dlFor(full, fname); if(!l.length) return "";
+  return `<span class="dlmark">✅ 済 ${esc(mmdd(l[0].at))}${l[0].dest?` 📁${esc(l[0].dest)}`:""}</span> `;
+}
+function dlBox(full){
+  const l = dlOf(full); if(!l.length) return "";
+  const x = l[0];
+  return `<div class="dlbox">✅ <b>ダウンロード済み</b>（${l.length}回）<br>
+    最後：${esc(jstStamp(new Date(x.at)))} ／ ${esc(x.file || x.name)}${x.dest?` ／ 📁 ${esc(x.path ? x.path.split("/").join(" ／ ") : x.dest)}`:""}
+    ${x.memo?`<div class="note" style="white-space:pre-wrap">📝 ${esc(x.memo)}</div>`:""}
+    <div class="row" style="margin-top:6px"><button class="btn sub sm" onclick="openManualEditor('${esc(x.id||"")}')">📘 説明書を作る・貼る</button></div></div>`;
+}
+function refreshDlMarks(full){
+  if(current && current.repo.full_name === full && !$("detailView").classList.contains("hidden")) renderDetail();
+  if(lastResults.length) renderResults();
+  renderFavs();
+}
+
+/* ---- Make or paste the manual later, into the same folder ---- */
+const entryFolderName = x => (x.path ? x.path.split("/").pop() : "") || safeName(x.app || (x.repo||"").split("/")[1]) || "app";
+function openManualEditor(id){
+  const x = LS.get("downloads", []).find(e=>e.id===id);
+  if(!x){ alert("この履歴は古い形式のため、説明書を作れません。もう一度ダウンロードしてください。"); return; }
+  const toFolder = CAN_FOLDER && !!x.dest && !!x.path;
+  const s = $("dlSheet"); $("dlModal").classList.add("on");
+  s.innerHTML = `<h2>📘 説明書を作る・貼る</h2>
+    <div class="note" style="word-break:break-all">${esc(x.repo)} ／ ${esc(x.file || x.name)}</div>
+    <div class="where" style="margin:8px 0">保存先：<span class="path">${toFolder ? "📁 " + esc(x.path.split("/").join(" ／ ")) + " ／ 説明書.txt"
+      : esc(`[${x.dest||"未分類"}] ${entryFolderName(x)}_説明書.txt`) + "（ダウンロードとして保存）"}</span>
+      ${x.manual?`<div class="note">今の説明書（${esc({muse:"Museの説明書",gemini:"自動で作成",failed:"作れなかった"}[x.manualSrc]||"")}）は上書きされます。</div>`:""}</div>
+    <div class="field"><label>Museの説明書を貼る欄（コピペした説明書を保存するときはここに貼ってください）</label>
+      <textarea id="eMuse" style="min-height:140px" placeholder="アシスタントが作った説明書をここに貼る"></textarea></div>
+    <div id="eMsg"></div>
+    <div class="row" style="justify-content:flex-end;margin-top:8px">
+      <button class="btn sub" id="eClose">閉じる</button>
+      <button class="btn sub" id="eGem" ${gemAvailable()?"":"disabled"}>READMEから自動で作る</button>
+      <button class="btn" id="eSave">貼った説明書を保存</button></div>
+    ${gemAvailable()?"":`<div class="note" style="margin-top:6px">自動で作るにはGeminiが必要です（キー未設定か、今日の上限）。</div>`}`;
+  const msg = (h, kind="info") => { $("eMsg").innerHTML = `<div class="msg ${kind}">${h}</div>`; };
+  const busy = on => { ["eGem","eSave","eClose"].forEach(k=>$(k).disabled = on || (k==="eGem" && !gemAvailable())); dlBusy = on; };
+  $("eClose").onclick = ()=>$("dlModal").classList.remove("on");
+  async function save(getText, src){
+    busy(true);
+    try{
+      let dir = null;
+      if(toFolder){   // permission must be asked right after the tap, before anything slow
+        if(!parentDir) await loadParent();
+        if(!parentDir) await pickParent();
+        if(!(await ensureParentPermission())) throw Object.assign(new Error("not allowed"), {name:"NotAllowedError"});
+      }
+      const text = await getText();
+      if(toFolder){
+        const destDir = await getSubDir(parentDir, x.dest);
+        dir = await getSubDir(destDir, entryFolderName(x));
+        await writeText(dir, "説明書.txt", text);
+      } else {
+        saveTextFile(text, `[${x.dest||"未分類"}] ${entryFolderName(x)}_説明書.txt`);
+      }
+      const l = LS.get("downloads", []); const e = l.find(y=>y.id===x.id);
+      if(e){ e.manual = text.slice(0,20000); e.manualSrc = src; LS.set("downloads", l); }
+      msg(toFolder ? "✅ 説明書.txt を保存しました（フォルダの中の説明書を入れ替えました）" : "✅ 説明書.txt を保存しました（ダウンロードを確認してください）");
+      renderHist(); if(current && current.repo.full_name===x.repo && !$("detailView").classList.contains("hidden")) renderDetail();
+    }catch(e){
+      msg(esc(e?.name && e.name!=="Error" ? folderErrJa(e) : ("説明書は生成できませんでした：" + (e.message==="GEMINI_LIMIT" ? "Geminiの今日の上限に達しました" : e.message))), "err");
+    }finally{ busy(false); }
+  }
+  $("eSave").onclick = ()=>{
+    const v = $("eMuse").value;
+    if(!v.trim()){ msg("説明書の文章を貼ってから押してください。", "warn"); return; }
+    save(async ()=>v, "muse");
+  };
+  $("eGem").onclick = ()=> save(async ()=>{
+    msg(`<span class="spin"></span> READMEからGeminiが作っています…（最大1分ほど）`);
+    const [o,n] = x.repo.split("/");
+    const repo = (current && current.repo.full_name===x.repo) ? current.repo : await gh(`/repos/${o}/${n}`);
+    if(!repo) throw new Error("リポジトリが見つかりませんでした（削除された可能性があります）");
+    return makeManual(repo, (current && current.repo.full_name===x.repo) ? current.readme : "");
+  }, "gemini");
+}
+
 /* ---- History ---- */
 function saveHist(entry){
   const l = LS.get("downloads", []); const i = l.findIndex(x=>x.id===entry.id);
@@ -993,11 +1086,13 @@ function renderHist(){
       ${x.manualSrc?`<div class="hl">📘 説明書：${esc(SRC[x.manualSrc]||"")}</div>`:""}
       <div class="row" style="margin-top:4px">
         ${x.manual?`<button class="btn sub sm" data-hm="${i}">説明書を見る</button>`:""}
+        ${x.repo?`<button class="btn sub sm" data-hx="${i}">📘 説明書を作る・貼る</button>`:""}
         ${x.dest && x.mode!=="folder"?`<button class="btn sub sm" data-hs="${i}">メモ.txt・説明書.txt を保存</button>`:""}
         ${x.repo?`<button class="btn sub sm" data-ho="${i}">アプリを開く</button>`:""}
       </div></div>`;
   }).join("") : `<div class="note">${q ? "見つかりませんでした。" : "まだありません。"}</div>`;
   $("dlList").querySelectorAll("[data-hm]").forEach(b=>b.onclick=()=>showManual(all[+b.dataset.hm]));
+  $("dlList").querySelectorAll("[data-hx]").forEach(b=>b.onclick=()=>openManualEditor(all[+b.dataset.hx].id));
   $("dlList").querySelectorAll("[data-hs]").forEach(b=>b.onclick=()=>saveHistTexts(all[+b.dataset.hs]));
   $("dlList").querySelectorAll("[data-ho]").forEach(b=>b.onclick=()=>{ const [o,n] = all[+b.dataset.ho].repo.split("/"); openRepo(o,n); });
 }
@@ -1088,7 +1183,7 @@ async function startDownload(a){
   dlBusy = true; LS.set("lastDest", destName);
   const now = new Date();
   const entry = {id: now.getTime()+"-"+Math.random().toString(36).slice(2,7), at: now.toISOString(), repo: repo.full_name, app: repo.name, url: repo.html_url,
-    name: a.name, dest: destName, memo, path: appDir ? `${parentDir.name}/${destName}/${appDir.name}` : "", mode: CAN_FOLDER ? "folder" : "prefix", manual:"", manualSrc:""};
+    name: a.name, file: a.name, dest: destName, memo, path: appDir ? `${parentDir.name}/${destName}/${appDir.name}` : "", mode: CAN_FOLDER ? "folder" : "prefix", manual:"", manualSrc:""};
   saveHist(entry);
 
   const s = $("dlSheet");
@@ -1125,6 +1220,7 @@ async function startDownload(a){
   await Promise.all([manualP, bodyP]);
   dlBusy = false;
   $("rClose").disabled = false; $("rClose").onclick = ()=>$("dlModal").classList.remove("on");
+  refreshDlMarks(repo.full_name);
   s.querySelector("h2").textContent = "終わりました";
 }
 async function downloadBody(a, ctx){
@@ -1269,7 +1365,7 @@ function renderFavs(){
   const nNew = l.filter(f=>f.newTag).length; const fc = $("favCnt");
   if(fc){ fc.textContent = nNew; fc.classList.toggle("hidden", !nNew); }
   $("favList").innerHTML = l.length ? l.map((f,i)=>`<div class="fav">
-     <a href="#" class="rname" data-f="${i}">${esc(f.full)}</a> ${f.newTag?`<span class="newtag">新しい版 ${esc(f.newTag)}</span>`:""}
+     <a href="#" class="rname" data-f="${i}">${esc(f.full)}</a> ${dlMark(f.full, true)}${f.newTag?`<span class="newtag">新しい版 ${esc(f.newTag)}</span>`:""}
      ${(f.ja||f.descJa)?`<div class="rja" style="display:block">🇯🇵 ${esc(f.ja||f.descJa)}</div>`:""}
      <div class="note">${esc(f.desc||"")}</div>
      <div class="meta">今の版 ${esc(f.tag||"なし")}</div></div>`).join("")
