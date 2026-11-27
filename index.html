@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.7.1">
+<meta name="app-version" content="1.8.0">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -89,6 +89,16 @@ h2{font-size:18px;margin:0 0 8px}h3{font-size:15px;margin:14px 0 6px}
 .bell{position:relative}.bell b{position:absolute;top:-6px;right:-6px;background:#ff6b6b;color:#fff;font-size:11px;border-radius:9px;padding:0 5px}
 ol.steps{padding-left:22px;font-size:15px}ol.steps li{margin:4px 0}
 footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
+.where{background:#f3f6fc;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px}
+.where .path{font-weight:700;word-break:break-all}
+.runrow{display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.runrow .ri{width:22px;flex-shrink:0;text-align:center}
+.hist{padding:10px 0;border-bottom:1px solid var(--line)}
+.hist:last-child{border-bottom:none}
+.hist .hl{font-size:13.5px;margin:2px 0;word-break:break-all}
+.hist .memo{white-space:pre-wrap;background:#f8f9fb;border-radius:6px;padding:4px 8px}
+.btn.sm{padding:5px 10px;font-size:13px}
+pre.manual{white-space:pre-wrap;font-family:inherit;font-size:14px;background:#f8f9fb;border-radius:8px;padding:10px;max-height:55vh;overflow:auto}
 </style>
 </head>
 <body>
@@ -159,6 +169,8 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
         <div class="note" id="favStatus" style="margin-top:6px"></div>
         <div id="favList" style="margin-top:8px"></div>
         <h3>ダウンロード履歴</h3>
+        <input type="text" id="histQ" placeholder="アプリ名やメモの言葉で検索">
+        <div class="note" id="histInfo" style="margin-top:4px"></div>
         <div id="dlList"></div>
         <h3>MacとiPhoneで共有</h3>
         <div class="note">お気に入りと履歴をファイルに書き出し、もう一方の端末で読み込みます。保存先を「iCloud Drive」にすると便利です。</div>
@@ -221,7 +233,7 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:16px}
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.7.1";
+const APP_VERSION = "1.8.0";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -589,7 +601,7 @@ async function translateResults(){
   if(!Object.keys(map).length) return;
   try{
     const out = await gemini(`Translate each GitHub repository description into short, natural, easy Japanese (max 60 Japanese characters each). Return only a JSON object that maps each id (as a string) to its Japanese text.\nInput:\n${JSON.stringify(map)}`);
-    lastResults.forEach(r=>{ if(out[r.id]) r._ja = out[r.id]; });
+    lastResults.forEach(r=>{ if(out[r.id]){ r._ja = out[r.id]; rememberJa(r.full_name, {short:r._ja}); } });
     renderResults();
   }catch(e){
     const why = e.message==="GEMINI_LIMIT" ? "Geminiの今日の上限に達しました" : e.message;
@@ -729,7 +741,9 @@ async function openRepo(owner, name){
       .sort((a,b)=>(a._os==="mac"?0:a._os==="other"?2:1)-(b._os==="mac"?0:b._os==="other"?2:1));
     const downloads = assets.reduce((s,a)=>s+(a.download_count||0),0);
     const sc = scoreRepo(repo, {ownerCreated:user?.created_at, readme:readme||"", hasAssets:assets.length>0, downloads});
-    current = {repo, rel, assets, sc, readme, langs: langs||{}};
+    // translations already made (search list / saved favorite) are shown again without re-translating
+    const tc = transCache[repo.full_name] || {}; const fv = favs().find(f=>f.full===repo.full_name) || {};
+    current = {repo, rel, assets, sc, readme, langs: langs||{}, ja:{short: tc.short || fv.descJa || "", long: tc.long || fv.ja || ""}};
     renderDetail();
   }catch(e){ $("detail").innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
 }
@@ -745,9 +759,9 @@ function renderDetail(){
   $("detail").innerHTML = `
   <div class="card">
     <h2 style="word-break:break-all">${esc(repo.full_name)}</h2>
-    <div id="dJa"></div>
+    <div id="dJa">${jaBox(current.ja)}</div>
     <div class="rdesc">${esc(repo.description||"（説明なし）")}</div>
-    <div class="row" style="margin-top:6px"><button class="btn sub" id="transBtn" ${gemAvailable()?"":"disabled"}>説明を日本語に訳す</button>
+    <div class="row" style="margin-top:6px"><button class="btn sub" id="transBtn" ${gemAvailable()?"":"disabled"}>${current.ja.long?"もう一度訳す":"説明を日本語に訳す"}</button>
       <a class="btn sub" href="${esc(repo.html_url)}" target="_blank" rel="noopener">GitHubで見る</a>
       <button class="star ${isFav(repo.full_name)?"on":""}" id="starBtn">${isFav(repo.full_name)?"★ お気に入り済み":"☆ お気に入りに追加"}</button></div>
     <div class="meta" style="margin-top:10px"><span>★ ${repo.stargazers_count.toLocaleString()}</span><span>作者 ${esc(repo.owner.login)}</span><span>作成 ${fmtDate(repo.created_at)}</span><span>更新 ${fmtDate(repo.pushed_at)}</span></div>
@@ -769,8 +783,8 @@ function renderDetail(){
       <button class="btn sub" id="zipBtn">ダウンロード</button></div>
     <div class="note" style="margin-top:8px">iPhoneでは保存先に「iCloud Drive」を選ぶと、家のMacに自動で同期されます。<a href="#" id="helpLink">保存のしかた</a></div>
   </div>`;
-  $("detail").querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>directDownload(current.assets[+b.dataset.a]));
-  $("zipBtn").onclick = ()=> directDownload({name: zipName, browser_download_url: zipUrl});
+  $("detail").querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>openDlPrep(current.assets[+b.dataset.a]));
+  $("zipBtn").onclick = ()=> openDlPrep({name: zipName, browser_download_url: zipUrl, _src:true});
   $("helpLink").onclick = e=>{ e.preventDefault(); openHelp(); };
   $("starBtn").onclick = ()=>{ toggleFav(current); renderDetail(); };
   markFavSeen(repo.full_name, rel?.tag_name);
@@ -778,28 +792,390 @@ function renderDetail(){
     $("transBtn").disabled = true; $("dJa").innerHTML = `<span class="spin"></span>`;
     try{
       const out = await gemini(`Translate this GitHub repository description and README excerpt into easy Japanese for a beginner. Return only JSON: {"ja": "Japanese summary, max 300 characters"}.\nDescription: ${repo.description||""}\nREADME excerpt: ${(current.readme||"").slice(0,3000)}`);
-      $("dJa").innerHTML = `<div class="rja" style="display:block">🇯🇵 ${esc(out.ja||"")}</div>`;
-    }catch(e){ $("dJa").innerHTML = `<div class="msg warn">翻訳できませんでした：${esc(e.message==="GEMINI_LIMIT"?"Geminiの今日の上限に達しました":e.message)}</div>`; }
+      if(out.ja){ current.ja.long = String(out.ja); rememberJa(repo.full_name, {long: current.ja.long}); }
+      $("dJa").innerHTML = jaBox(current.ja); $("transBtn").disabled = false; $("transBtn").textContent = "もう一度訳す";
+    }catch(e){ $("dJa").innerHTML = jaBox(current.ja) + `<div class="msg warn">翻訳できませんでした：${esc(e.message==="GEMINI_LIMIT"?"Geminiの今日の上限に達しました":e.message)}</div>`; $("transBtn").disabled = false; }
   };
 }
 
-/* ===== Download history ===== */
-function recordDownload(a){
-  const list = LS.get("downloads", []);
-  list.unshift({repo:current.repo.full_name, name:a.name, at:new Date().toISOString()});
-  LS.set("downloads", list.slice(0,300));
+/* ===== Download: destination folder, memo, manual, history ===== */
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+// Folder saving works only where the File System Access API exists (Chrome / Edge on Mac or Windows).
+// Pake version, iPhone and Safari do not have it -> file names get a [destination] prefix instead.
+const CAN_FOLDER = typeof window.showDirectoryPicker === "function" && window.isSecureContext && !IS_IOS;
+let dlBusy = false;
+
+/* The chosen parent folder is kept in IndexedDB (a folder cannot be stored in localStorage). Nothing leaves this device. */
+const IDB = {
+  open(){ return new Promise((ok,ng)=>{ const r = indexedDB.open("gitgetter", 1); r.onupgradeneeded = ()=>r.result.createObjectStore("kv"); r.onsuccess = ()=>ok(r.result); r.onerror = ()=>ng(r.error); }); },
+  async get(k){ const db = await this.open(); return new Promise((ok,ng)=>{ const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = ()=>ok(q.result); q.onerror = ()=>ng(q.error); }); },
+  async set(k,v){ const db = await this.open(); return new Promise((ok,ng)=>{ const t = db.transaction("kv","readwrite"); t.objectStore("kv").put(v,k); t.oncomplete = ()=>ok(); t.onerror = ()=>ng(t.error); }); }
+};
+let parentDir = null;
+async function loadParent(){ if(!CAN_FOLDER) return null; try{ parentDir = (await IDB.get("parentDir")) || null; }catch(e){ parentDir = null; } return parentDir; }
+async function pickParent(){
+  const h = await window.showDirectoryPicker({id:"gitgetter-parent", mode:"readwrite", startIn:"documents"});
+  parentDir = h; try{ await IDB.set("parentDir", h); }catch(e){}
+  return h;
 }
-function directDownload(a){
-  if(current.sc.lv === "red" && !confirm("このアプリは安全度が「赤（危険）」です。それでもダウンロードしますか？")) return;
-  const link = document.createElement("a"); link.href = a.browser_download_url; link.target = "_blank"; link.rel = "noopener";
+async function ensureParentPermission(){
+  if(!parentDir) return false;
+  const o = {mode:"readwrite"};
+  if((await parentDir.queryPermission(o)) === "granted") return true;
+  return (await parentDir.requestPermission(o)) === "granted";
+}
+function safeName(s){
+  return String(s||"").normalize("NFC").replace(/[\/\\:*?"<>|\u0000-\u001f]/g,"_").replace(/^[.\s]+|[.\s]+$/g,"").slice(0,80);
+}
+const sameName = (a,b) => a.normalize("NFC").toLowerCase() === b.normalize("NFC").toLowerCase();
+/* Use the existing folder if one with the same name is already there (upper/lower case ignored); create it only if missing */
+async function getSubDir(parent, name){
+  for await (const [n, h] of parent.entries()){ if(h.kind === "directory" && sameName(n, name)) return h; }
+  return parent.getDirectoryHandle(name, {create:true});
+}
+function knownDests(){
+  const m = new Map();
+  for(const x of LS.get("downloads", [])){ if(x.dest){ const k = x.dest.normalize("NFC").toLowerCase(); if(!m.has(k)) m.set(k, x.dest); } }
+  return [...m.values()];
+}
+const canonDest = name => knownDests().find(d=>sameName(d, name)) || name;
+
+async function writeData(dir, name, data){
+  const fh = await dir.getFileHandle(name, {create:true});
+  const w = await fh.createWritable();
+  try{ await w.write(data); await w.close(); }catch(e){ try{ await w.abort(); }catch(_){} throw e; }
+}
+const BOM = "﻿";
+const writeText = (dir, name, text) => writeData(dir, name, new Blob([BOM + text], {type:"text/plain;charset=utf-8"}));
+async function writeResponse(dir, name, res, onProg){
+  const total = +res.headers.get("content-length") || 0;
+  const fh = await dir.getFileHandle(name, {create:true}); const w = await fh.createWritable();
+  const rd = res.body.getReader(); let got = 0;
+  try{
+    for(;;){ const {done, value} = await rd.read(); if(done) break; await w.write(value); got += value.length; if(onProg) onProg(got, total); }
+    await w.close();
+  }catch(e){ try{ await w.abort(); }catch(_){} throw e; }
+}
+function saveBlob(blob, filename){
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 300000);
+}
+const saveTextFile = (text, filename) => saveBlob(new Blob([BOM + text], {type:"text/plain;charset=utf-8"}), filename);
+function plainDownload(url){
+  const link = document.createElement("a"); link.href = url; link.target = "_blank"; link.rel = "noopener";
   document.body.appendChild(link); link.click(); link.remove();
-  recordDownload(a);
-  const box = document.createElement("div"); box.className = "msg info";
-  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
-  box.textContent = isIOS
-    ? `「${a.name}」という名前で保存されます。Safariの「ダウンロードしますか？」で「ダウンロード」を押してください。保存場所：「ファイル」アプリ →「ダウンロード」（iCloud Driveに保存すると、家のMacでも開けます）`
-    : `「${a.name}」という名前で保存されます。保存場所：Finderの「ダウンロード」フォルダ`;
-  $("detail").prepend(box); window.scrollTo({top:0, behavior:"smooth"});
+}
+/* fetch that gives up if the server does not start answering in time (the body itself may take as long as it needs) */
+async function fetchHead(url, ms){
+  const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), ms);
+  try{ const r = await fetch(url, {signal: ctl.signal}); clearTimeout(t); return r; }
+  catch(e){ clearTimeout(t); throw e; }
+}
+function jstStamp(d){
+  const p = new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}).formatToParts(d||new Date());
+  const g = t => (p.find(x=>x.type===t)||{}).value || "";
+  return `${g("year")}-${g("month")}-${g("day")} ${g("hour")}:${g("minute")}`;
+}
+const fmtMB = b => b ? (b/1e6).toFixed(1)+"MB" : "";
+
+/* ---- Source code zip, built inside the browser (GitHub's own zip download cannot be read by a web page) ---- */
+const CRC_T = (()=>{ const t = new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n] = c>>>0; } return t; })();
+function crc32(u8){ let c = 0xFFFFFFFF; for(let i=0;i<u8.length;i++) c = CRC_T[(c^u8[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function makeZip(files){
+  const enc = new TextEncoder(); const parts = [], central = []; let off = 0;
+  const d = new Date();
+  const dt = ((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate(), tm = (d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1);
+  for(const f of files){
+    const nm = enc.encode(f.path), crc = crc32(f.data), sz = f.data.length;
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true);
+    h.setUint16(10,tm,true); h.setUint16(12,dt,true); h.setUint32(14,crc,true); h.setUint32(18,sz,true); h.setUint32(22,sz,true);
+    h.setUint16(26,nm.length,true); h.setUint16(28,0,true);
+    parts.push(h.buffer, nm, f.data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true); c.setUint16(4,(3<<8)|20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(10,0,true);
+    c.setUint16(12,tm,true); c.setUint16(14,dt,true); c.setUint32(16,crc,true); c.setUint32(20,sz,true); c.setUint32(24,sz,true);
+    c.setUint16(28,nm.length,true); c.setUint32(38, ((f.exec ? 0o100755 : 0o100644) * 65536) >>> 0, true); c.setUint32(42,off,true);
+    central.push(c.buffer, nm);
+    off += 30 + nm.length + sz;
+  }
+  const cdSize = central.reduce((s,p)=>s+p.byteLength, 0);
+  const e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true); e.setUint32(12,cdSize,true); e.setUint32(16,off,true);
+  return new Blob([...parts, ...central, e.buffer], {type:"application/zip"});
+}
+const SRC_MAX_FILES = 2000, SRC_MAX_BYTES = 150e6;
+async function buildSourceZip(repo, onProg){
+  const br = String(repo.default_branch);
+  const t = await gh(`/repos/${repo.full_name}/git/trees/${encodeURIComponent(br)}?recursive=1`);
+  if(!t || t.truncated) throw new Error("ファイルの数が多すぎます");
+  const blobs = (t.tree||[]).filter(x=>x.type==="blob");
+  const total = blobs.reduce((s,x)=>s+(x.size||0), 0);
+  if(!blobs.length) throw new Error("ファイルがありません");
+  if(blobs.length > SRC_MAX_FILES || total > SRC_MAX_BYTES) throw new Error(`大きすぎます（${blobs.length}ファイル・${fmtMB(total)}）`);
+  const root = `${repo.name}-${br.replace(/\//g,"-")}/`;
+  const enc = p => p.split("/").map(encodeURIComponent).join("/");
+  const out = new Array(blobs.length); let next = 0, done = 0;
+  async function worker(){
+    while(next < blobs.length){
+      const k = next++; const b = blobs[k];
+      const r = await fetchHead(`https://raw.githubusercontent.com/${repo.full_name}/refs/heads/${enc(br)}/${enc(b.path)}`, 60000);
+      if(!r.ok) throw new Error(`「${b.path}」を取得できませんでした（${r.status}）`);
+      out[k] = {path: root + b.path, data: new Uint8Array(await r.arrayBuffer()), exec: b.mode === "100755"};
+      done++; if(onProg) onProg(done, blobs.length);
+    }
+  }
+  await Promise.all(Array.from({length:6}, worker));
+  return makeZip(out);
+}
+
+/* ---- Text files ---- */
+function memoText(x){
+  return `アプリ名：${x.app}\nリポジトリURL：${x.url}\nダウンロード日付：${x.date}\n行き先フォルダ名：${x.dest}\nファイル：${x.file}\n\nメモ：\n${x.memo || "（なし）"}\n`;
+}
+async function makeManual(repo, readme){
+  if(!readme){ try{ readme = (await gh(`/repos/${repo.full_name}/readme`, "application/vnd.github.raw")) || ""; }catch(e){ readme = ""; } }
+  if(!readme) throw new Error("このリポジトリにはREADME（説明のページ）がありません");
+  if(!gemAvailable()) throw new Error(!cfg().gemKey ? "Gemini APIキーが未設定です（⚙ 設定で入れられます）" : "Geminiの今日の上限に達しました");
+  const lic = licenseJa(repo.license)[1];
+  const out = await gemini(`You write a beginner's manual in Japanese for a Japanese user who cannot read English and is not a programmer.
+Base it ONLY on the README below. If the README does not cover something, write 「READMEには書かれていません」 for that part instead of guessing.
+Use exactly these five headings, in this order, each on its own line:
+①何のアプリか
+②何ができるか
+③インストール方法
+④基本の使い方
+⑤ライセンスと注意点
+Rules:
+- Plain text only. No Markdown symbols (#, *, **, \`\`\`, |).
+- Short, easy sentences. The first time a technical word appears, explain it simply in brackets, e.g. ターミナル（Macで文字の命令を打ち込むアプリ）.
+- Commands the user must type may be kept as they are, each on its own line.
+- In ⑤, explain the license in easy words (this app judged it as: ${lic}) and list cautions (paid parts, accounts, OS limits, security warnings) if the README mentions any.
+- About 2500 Japanese characters at most.
+Return only JSON: {"manual": "the whole manual text, with \\n for new lines"}
+App: ${repo.full_name}
+Description: ${repo.description||""}
+Main language: ${repo.language||""}
+License id: ${repo.license?.spdx_id||"none"}
+README:
+<<<${readme.slice(0,15000)}>>>`);
+  const m = String(out.manual||"").trim();
+  if(!m) throw new Error("Geminiの返事が空でした");
+  return `説明書：${repo.name}\nリポジトリ：${repo.html_url}\n作成：${jstStamp()}（GeminiがREADMEから自動で作りました。正確な内容は元のREADMEで確かめてください）\n\n${m}\n`;
+}
+function manualFailText(repo, e){
+  const why = e?.message === "GEMINI_LIMIT" ? "Geminiの今日の上限に達しました" : (e?.message || "不明なエラー");
+  return `説明書は生成できませんでした。\n理由：${why}\nリポジトリ：${repo.html_url}\n（元の説明はGitHubのページで見られます）\n`;
+}
+
+/* ---- History ---- */
+function saveHist(entry){
+  const l = LS.get("downloads", []); const i = l.findIndex(x=>x.id===entry.id);
+  if(i >= 0) l[i] = entry; else l.unshift(entry);
+  LS.set("downloads", l.slice(0,300));
+  if(!$("dlList").closest(".hidden")) renderHist();
+}
+function renderHist(){
+  const q = ($("histQ").value||"").trim().normalize("NFC").toLowerCase();
+  const all = LS.get("downloads", []);
+  const hit = q ? all.filter(x=>[x.repo, x.name, x.memo, x.dest].some(v=>String(v||"").normalize("NFC").toLowerCase().includes(q))) : all;
+  const shown = hit.slice(0,100);
+  $("histInfo").textContent = all.length ? (q ? `「${$("histQ").value.trim()}」で ${hit.length}件` : `全${all.length}件`) + (hit.length>100 ? "（新しい100件を表示）" : "") : "";
+  const SRC = {muse:"Museの説明書", gemini:"自動で作成", failed:"作れませんでした"};
+  const MODE = {folder:"フォルダに保存", prefix:"名前の頭に行き先を付けて保存", plain:"元の名前でダウンロード", wait:"ダウンロードフォルダにあります（未移動）"};
+  $("dlList").innerHTML = shown.length ? shown.map(x=>{
+    const i = all.indexOf(x);
+    return `<div class="hist">
+      <div class="hl"><b>${esc(x.name)}</b></div>
+      <div class="meta"><span>🕒 ${esc(x.at ? jstStamp(new Date(x.at)) : "")}</span><span>📦 ${esc(x.repo||"")}</span></div>
+      ${x.dest?`<div class="hl">📁 ${esc(x.path || x.dest)}${x.mode?`<span class="note">（${esc(MODE[x.mode]||x.mode)}）</span>`:""}</div>`:""}
+      ${x.memo?`<div class="hl memo">📝 ${esc(x.memo)}</div>`:""}
+      ${x.manualSrc?`<div class="hl">📘 説明書：${esc(SRC[x.manualSrc]||"")}</div>`:""}
+      <div class="row" style="margin-top:4px">
+        ${x.manual?`<button class="btn sub sm" data-hm="${i}">説明書を見る</button>`:""}
+        ${x.dest && x.mode!=="folder"?`<button class="btn sub sm" data-hs="${i}">メモ.txt・説明書.txt を保存</button>`:""}
+        ${x.repo?`<button class="btn sub sm" data-ho="${i}">アプリを開く</button>`:""}
+      </div></div>`;
+  }).join("") : `<div class="note">${q ? "見つかりませんでした。" : "まだありません。"}</div>`;
+  $("dlList").querySelectorAll("[data-hm]").forEach(b=>b.onclick=()=>showManual(all[+b.dataset.hm]));
+  $("dlList").querySelectorAll("[data-hs]").forEach(b=>b.onclick=()=>saveHistTexts(all[+b.dataset.hs]));
+  $("dlList").querySelectorAll("[data-ho]").forEach(b=>b.onclick=()=>{ const [o,n] = all[+b.dataset.ho].repo.split("/"); openRepo(o,n); });
+}
+function histMemo(x){ return memoText({app:x.app || (x.repo||"").split("/")[1] || x.name, url:x.url || `https://github.com/${x.repo}`, date:jstStamp(new Date(x.at)), dest:x.dest, file:x.name, memo:x.memo}); }
+function saveHistTexts(x){
+  const app = safeName(x.app || (x.repo||"").split("/")[1] || "app");
+  saveTextFile(histMemo(x), `[${x.dest}] ${app}_メモ.txt`);
+  if(x.manual) setTimeout(()=>saveTextFile(x.manual, `[${x.dest}] ${app}_説明書.txt`), 800);
+}
+function showManual(x){
+  const s = $("dlSheet"); $("dlModal").classList.add("on");
+  s.innerHTML = `<h2>📘 説明書</h2><div class="note">${esc(x.repo||"")}</div><pre class="manual">${esc(x.manual||"")}</pre>
+    <div class="row" style="justify-content:flex-end"><button class="btn" id="mClose">閉じる</button></div>`;
+  $("mClose").onclick = ()=>$("dlModal").classList.remove("on");
+}
+
+/* ---- Step 1: the form shown before downloading ---- */
+function openDlPrep(a){
+  if(current.sc.lv === "red" && !confirm("このアプリは安全度が「赤（危険）」です。それでもダウンロードしますか？")) return;
+  const s = $("dlSheet"); $("dlModal").classList.add("on");
+  s.innerHTML = `<h2>ダウンロードの準備</h2>
+    <div class="note" style="margin-bottom:10px;word-break:break-all">${esc(current.repo.full_name)} ／ ${esc(a.name)}</div>
+    <div class="field"><label>① 行き先フォルダ名（例：Rokid用、動画用、OBS用）</label>
+      <input type="text" id="pDest" list="destList" value="${esc(LS.get("lastDest",""))}" placeholder="例：Rokid用">
+      <datalist id="destList">${knownDests().map(d=>`<option value="${esc(d)}">`).join("")}</datalist></div>
+    <div class="field"><label>② メモ（自分用のメモ）</label><textarea id="pMemo" placeholder="例：Rokidで本を読むときに使う"></textarea></div>
+    <div class="field"><label>③ Museの説明書を貼る欄（ここに文章があると、自動の説明書は作らずにこれを使います）</label>
+      <textarea id="pMuse" placeholder="アシスタントが作った説明書をここに貼る"></textarea></div>
+    <div id="pWhere"></div>
+    <div id="pErr"></div>
+    <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn sub" id="pCancel">やめる</button><button class="btn" id="pGo">ダウンロード開始</button></div>`;
+  renderWhere(a);
+  $("pDest").oninput = ()=>renderWhere(a, true);
+  $("pCancel").onclick = ()=>$("dlModal").classList.remove("on");
+  $("pGo").onclick = ()=>startDownload(a);
+}
+function renderWhere(a, pathOnly){
+  const dest = safeName($("pDest").value) || "（行き先）";
+  const app = safeName(current.repo.name);
+  let h;
+  if(CAN_FOLDER){
+    const path = parentDir ? `📁 ${esc(parentDir.name)} ／ ${esc(dest)} ／ ${esc(app)}` : `📁 （親フォルダ） ／ ${esc(dest)} ／ ${esc(app)}`;
+    if(pathOnly && $("pPath")){ $("pPath").innerHTML = path; return; }
+    h = `<div class="where">
+      <div>保存先：<span class="path" id="pPath">${path}</span></div>
+      <div class="note">この中に「${esc(a.name)}」「メモ.txt」「説明書.txt」を入れます。行き先フォルダが既にあれば、それを使います。</div>
+      ${parentDir ? `<div class="row" style="margin-top:6px"><button class="btn sub sm" id="pPick">親フォルダを変える</button></div>`
+        : `<div class="msg info" style="margin:8px 0 0"><b>最初の1回だけ、親フォルダを選びます。</b><br>
+          選ぶ画面の左側で「iCloud Drive」を押し、その中に「GitGetter」などのフォルダを作って（左下の「新規フォルダ」）、そのフォルダを選んで「開く」を押してください。iCloud Driveの中にしておくと、iPhoneの「ファイル」アプリからも同じフォルダが見られます。<br>
+          Chromeに「ファイルの編集を許可しますか？」と聞かれたら「編集を許可」（「毎回許可」があればそちら）を押してください。</div>`}
+      ${a._src ? "" : `<div class="note" style="margin-top:6px">※ 完成品ファイルはGitHubの決まりでWebアプリから直接フォルダに入れられないため、いったん普段の「ダウンロード」フォルダに落ちます。終わったら「ファイルを選んで移す」を押すと、行き先フォルダに入れます。</div>`}
+    </div>`;
+  } else {
+    const fname = `[${dest}] ${a.name}`;
+    if(pathOnly && $("pPath")){ $("pPath").textContent = a._src ? fname : a.name; return; }
+    h = `<div class="where">
+      <div>保存される名前：<span class="path" id="pPath">${esc(a._src ? fname : a.name)}</span></div>
+      <div class="note">この環境（iPhone・Safari・Pake版）ではフォルダを作れないため、ファイル名の頭に [行き先フォルダ名] を付けて保存します。メモと説明書はこのアプリの履歴に残ります（履歴から .txt として保存もできます）。${IS_IOS ? "保存先は設定どおり iCloud Drive です。" : ""}</div>
+      ${a._src ? "" : `<div class="note" style="margin-top:6px">※ 完成品ファイル（.dmg など）は、GitHubの決まりでWebアプリから名前を変えられないため、元の名前のまま保存されます。</div>`}
+    </div>`;
+  }
+  $("pWhere").innerHTML = h;
+  if($("pPick")) $("pPick").onclick = async ()=>{ try{ await pickParent(); }catch(e){ if(e.name!=="AbortError") $("pErr").innerHTML = `<div class="msg err">${esc(folderErrJa(e))}</div>`; } renderWhere(a); };
+}
+function folderErrJa(e){
+  if(e?.name === "AbortError") return "フォルダ選びを取り消しました。";
+  if(e?.name === "SecurityError" || /system|blocked/i.test(e?.message||"")) return "このフォルダはChromeが使わせてくれません（システムのファイルがある場所）。iCloud Driveの中に作ったフォルダなど、別のフォルダを選んでください。";
+  if(e?.name === "NotAllowedError") return "フォルダへの書き込みが許可されませんでした。もう一度押して「許可」を選んでください。";
+  return "フォルダに保存できませんでした：" + (e?.message || e);
+}
+
+/* ---- Step 2: run ---- */
+async function startDownload(a){
+  const destIn = safeName($("pDest").value);
+  if(!destIn){ $("pErr").innerHTML = `<div class="msg err">行き先フォルダ名を入れてください。</div>`; $("pDest").focus(); return; }
+  const memo = $("pMemo").value.trim(), muse = $("pMuse").value;
+  const cur = current, repo = cur.repo, appName = safeName(repo.name) || "app";
+  let destName = canonDest(destIn), appDir = null;
+  $("pGo").disabled = true;
+  if(CAN_FOLDER){
+    try{
+      if(!parentDir) await pickParent();
+      if(!(await ensureParentPermission())) throw Object.assign(new Error("not allowed"), {name:"NotAllowedError"});
+      const destDir = await getSubDir(parentDir, destName); destName = destDir.name;
+      appDir = await getSubDir(destDir, appName);
+    }catch(e){ $("pGo").disabled = false; $("pErr").innerHTML = `<div class="msg err">${esc(folderErrJa(e))}</div>`; renderWhere(a); return; }
+  }
+  dlBusy = true; LS.set("lastDest", destName);
+  const now = new Date();
+  const entry = {id: now.getTime()+"-"+Math.random().toString(36).slice(2,7), at: now.toISOString(), repo: repo.full_name, app: repo.name, url: repo.html_url,
+    name: a.name, dest: destName, memo, path: appDir ? `${parentDir.name}/${destName}/${appDir.name}` : "", mode: CAN_FOLDER ? "folder" : "prefix", manual:"", manualSrc:""};
+  saveHist(entry);
+
+  const s = $("dlSheet");
+  s.innerHTML = `<h2>ダウンロード中</h2>
+    <div class="note" style="word-break:break-all">${esc(entry.path ? "📁 " + entry.path.split("/").join(" ／ ") : "行き先：" + destName)}</div>
+    <div class="runrow"><span class="ri" id="iBody"><span class="spin"></span></span><div style="flex:1"><b>アプリ本体</b>（${esc(a.name)}）<div class="note" id="tBody">準備しています…</div><div id="actBody"></div></div></div>
+    <div class="runrow"><span class="ri" id="iMemo"><span class="spin"></span></span><div style="flex:1"><b>メモ.txt</b><div class="note" id="tMemo"></div></div></div>
+    <div class="runrow"><span class="ri" id="iMan"><span class="spin"></span></span><div style="flex:1"><b>説明書.txt</b><div class="note" id="tMan">${muse.trim() ? "Museの説明書を使います" : "READMEからGeminiが作っています…（最大1分ほど）"}</div></div></div>
+    <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="rClose" disabled>閉じる</button></div>`;
+  const ICON = {ok:"✅", err:"⚠️", wait:"👉", work:'<span class="spin"></span>'};
+  const step = (k, st, text) => { $("i"+k).innerHTML = ICON[st]; if(text !== undefined) $("t"+k).textContent = text; };
+
+  // memo
+  const mText = memoText({app: repo.name, url: repo.html_url, date: jstStamp(now), dest: destName, file: a.name, memo});
+  if(appDir){ try{ await writeText(appDir, "メモ.txt", mText); step("Memo","ok","保存しました"); }catch(e){ step("Memo","err", folderErrJa(e)); } }
+  else step("Memo","ok","このアプリの履歴に残しました");
+
+  // manual (Muse text has priority; a failure never stops the app download)
+  const manualP = (async ()=>{
+    let m;
+    if(muse.trim()) m = {src:"muse", text: muse};
+    else { try{ m = {src:"gemini", text: await makeManual(repo, cur.readme)}; }catch(e){ m = {src:"failed", text: manualFailText(repo, e)}; } }
+    entry.manual = m.text.slice(0,20000); entry.manualSrc = m.src; saveHist(entry);
+    let saved = !appDir;
+    if(appDir){ try{ await writeText(appDir, "説明書.txt", m.text); saved = true; }catch(e){ step("Man","err", folderErrJa(e)); return; } }
+    const where = appDir ? "保存しました" : "このアプリの履歴に残しました";
+    if(m.src === "failed") step("Man","err", `説明書は生成できませんでした（${m.text.split("\n")[1].replace("理由：","")}）。その旨を書いたファイルを${appDir?"入れました":"残しました"}。`);
+    else step("Man", saved ? "ok" : "err", (m.src==="muse" ? "Museの説明書を" : "自動で作った説明書を") + where);
+  })();
+
+  // app body
+  const bodyP = downloadBody(a, {repo, appDir, destName, entry, step}).catch(e=>{ step("Body","err","ダウンロードできませんでした：" + (e.message||e)); });
+
+  await Promise.all([manualP, bodyP]);
+  dlBusy = false;
+  $("rClose").disabled = false; $("rClose").onclick = ()=>$("dlModal").classList.remove("on");
+  s.querySelector("h2").textContent = "終わりました";
+}
+async function downloadBody(a, ctx){
+  const {repo, appDir, destName, entry, step} = ctx;
+  const prefName = `[${destName}] ${a.name}`;
+  const done = (mode, text) => { entry.mode = mode; saveHist(entry); step("Body", mode==="wait" ? "wait" : "ok", text); };
+  if(a._src){
+    // source code: collect the files and make the zip here
+    let blob = null;
+    try{
+      step("Body","work","ソースコードを集めています…");
+      blob = await buildSourceZip(repo, (d,n)=>step("Body","work",`ソースコードを集めています… ${d}/${n}ファイル`));
+    }catch(e){ step("Body","work",`この中ではまとめられなかったので、GitHubから直接落とします（${e.message||e}）`); }
+    if(blob){
+      if(appDir){ try{ await writeData(appDir, a.name, blob); }catch(e){ throw new Error(folderErrJa(e)); } done("folder", "行き先フォルダに保存しました"); return; }
+      saveBlob(blob, prefName); entry.name = prefName; done("prefix", `「${prefName}」として保存しました`); return;
+    }
+  } else {
+    // release file: try reading it directly (works only if GitHub ever allows it)
+    try{
+      const r = await fetchHead(a.browser_download_url, 15000);
+      if(r.ok){
+        if(appDir){ await writeResponse(appDir, a.name, r, (g,t)=>step("Body","work",`ダウンロード中… ${t?Math.floor(g*100/t)+"%":fmtMB(g)}`)); done("folder","行き先フォルダに保存しました"); return; }
+        step("Body","work","ダウンロード中…"); saveBlob(await r.blob(), prefName); entry.name = prefName; done("prefix", `「${prefName}」として保存しました`); return;
+      }
+    }catch(e){ /* expected: GitHub does not allow web pages to read release files */ }
+  }
+  // ordinary browser download (original name, into the usual Downloads folder)
+  plainDownload(a.browser_download_url);
+  if(!appDir){
+    done("plain", IS_IOS ? `「${a.name}」の名前で保存されます。Safariの「ダウンロードしますか？」で「ダウンロード」を押してください（保存先：iCloud Drive）。`
+                         : `「${a.name}」の名前で、普段の「ダウンロード」フォルダに保存されます。`);
+    return;
+  }
+  done("wait", `いつもの「ダウンロード」フォルダに落としています。終わったら下のボタンを押して、「${a.name}」を選んでください。行き先フォルダにコピーします。`);
+  await new Promise(resolve=>{
+    $("actBody").innerHTML = `<div class="row" style="margin-top:6px"><button class="btn sm" id="mvGo">ファイルを選んで移す</button><button class="btn sub sm" id="mvSkip">あとで自分で移す</button></div>`;
+    $("mvSkip").onclick = ()=>{ $("actBody").innerHTML = ""; step("Body","wait",`「ダウンロード」フォルダにあります。必要なら Finder で「${entry.path.split("/").slice(1).join(" ／ ")}」へ移してください。`); resolve(); };
+    $("mvGo").onclick = async ()=>{
+      try{
+        const [h] = await window.showOpenFilePicker({id:"gitgetter-dl", startIn:"downloads", multiple:false});
+        const f = await h.getFile();
+        if(f.name !== a.name && !confirm(`選んだのは「${f.name}」です。「${a.name}」として行き先フォルダに入れますか？`)) return;
+        step("Body","work","行き先フォルダにコピーしています…");
+        await writeData(appDir, a.name, f);
+        $("actBody").innerHTML = "";
+        done("folder", "行き先フォルダに入れました（「ダウンロード」フォルダの元のファイルは消してかまいません）");
+        resolve();
+      }catch(e){ if(e.name !== "AbortError") step("Body","err", folderErrJa(e)); }
+    };
+  });
 }
 
 /* ===== App update (compares with version.json on the same site) ===== */
@@ -867,8 +1243,22 @@ const isFav = full => favs().some(f=>f.full===full);
 function toggleFav(cur){
   let l = favs(); const full = cur.repo.full_name;
   if(l.some(f=>f.full===full)) l = l.filter(f=>f.full!==full);
-  else l.unshift({full, desc:cur.repo.description||"", tag:cur.rel?.tag_name||"", newTag:"", addedAt:new Date().toISOString(), lastCheck:0});
+  else l.unshift({full, desc:cur.repo.description||"", descJa:cur.ja?.short||"", ja:cur.ja?.long||"", tag:cur.rel?.tag_name||"", newTag:"", addedAt:new Date().toISOString(), lastCheck:0});
   LS.set("favs", l); renderFavs();
+}
+/* Translations: kept for this session, and saved into the favorite so it never falls back to English */
+const transCache = {};
+function rememberJa(full, part){
+  transCache[full] = Object.assign({}, transCache[full], part);
+  const l = favs(); const f = l.find(x=>x.full===full); if(!f) return;
+  if(part.short) f.descJa = part.short;
+  if(part.long) f.ja = part.long;
+  LS.set("favs", l);
+}
+function jaBox(ja){
+  if(ja?.long) return `<div class="rja" style="display:block">🇯🇵 ${esc(ja.long)}</div>`;
+  if(ja?.short) return `<div class="rja" style="display:block">🇯🇵 ${esc(ja.short)}</div>`;
+  return "";
 }
 function markFavSeen(full, tag){
   const l = favs(); const f = l.find(x=>x.full===full); if(!f) return;
@@ -880,14 +1270,12 @@ function renderFavs(){
   if(fc){ fc.textContent = nNew; fc.classList.toggle("hidden", !nNew); }
   $("favList").innerHTML = l.length ? l.map((f,i)=>`<div class="fav">
      <a href="#" class="rname" data-f="${i}">${esc(f.full)}</a> ${f.newTag?`<span class="newtag">新しい版 ${esc(f.newTag)}</span>`:""}
+     ${(f.ja||f.descJa)?`<div class="rja" style="display:block">🇯🇵 ${esc(f.ja||f.descJa)}</div>`:""}
      <div class="note">${esc(f.desc||"")}</div>
      <div class="meta">今の版 ${esc(f.tag||"なし")}</div></div>`).join("")
     : `<div class="note">まだありません。アプリの詳細画面の「☆ お気に入りに追加」で登録できます。</div>`;
   $("favList").querySelectorAll("[data-f]").forEach(a=>a.onclick=e=>{ e.preventDefault(); const [o,n]=l[+a.dataset.f].full.split("/"); openRepo(o,n); });
-  const d = LS.get("downloads", []);
-  $("dlList").innerHTML = d.length ? d.slice(0,30).map(x=>`<div class="fav"><span class="rname">${esc(x.name)}</span>
-     <div class="meta"><span>${esc(x.repo)}</span><span>${esc((x.at||"").slice(0,10))}</span></div></div>`).join("")
-    : `<div class="note">まだありません。</div>`;
+  renderHist();
 }
 
 /* Check favorites for new releases (on launch, at most once per hour unless forced) */
@@ -939,7 +1327,8 @@ async function importData(file){
     for(const f of j.favs){ if(f.full && !l.some(x=>x.full===f.full)){ l.push(f); addF++; } }
     LS.set("favs", l);
     const d = LS.get("downloads", []); let addD = 0;
-    for(const x of (j.downloads||[])){ if(!d.some(y=>y.name===x.name && y.sha===x.sha)){ d.push(x); addD++; } }
+    const hk = x => x.id || (x.name+"|"+x.at);
+    for(const x of (j.downloads||[])){ if(!d.some(y=>hk(y)===hk(x))){ d.push(x); addD++; } }
     d.sort((a,b)=>(b.at||"").localeCompare(a.at||"")); LS.set("downloads", d.slice(0,300));
     renderFavs(); $("favStatus").textContent = `読み込みました（お気に入り ${addF}件、履歴 ${addD}件を追加）。`;
   }catch(e){ $("favStatus").textContent = "このファイルは読み込めませんでした（Git Getterで書き出したファイルを選んでください）。"; }
@@ -955,6 +1344,10 @@ function openHelp(){
    <div class="note">毎回iCloud Driveに保存したいときは、iPhoneの「設定」→「アプリ」→「Safari」→「ダウンロード」で保存先を「iCloud Drive」にできます。</div>
    <h3>お気に入りを共有する</h3>
    <ol class="steps"><li>片方の端末で「⭐ お気に入り」→「書き出す」</li><li>保存先に「iCloud Drive」を選ぶ</li><li>もう一方の端末で「読み込む」→ そのファイルを選ぶ</li></ol>
+   <h3>行き先フォルダ・メモ・説明書</h3>
+   <ol class="steps"><li>「ダウンロード」を押すと、行き先フォルダ名・メモ・Museの説明書を貼る欄が出ます</li>
+   <li>MacのChromeでは「親フォルダ ／ 行き先フォルダ ／ アプリ名」の中に、アプリ本体・メモ.txt・説明書.txt を入れます（親フォルダは最初の1回だけ選びます。iCloud Driveの中のフォルダがおすすめ）</li>
+   <li>iPhone・Safari・Pake版では、ファイル名の頭に [行き先フォルダ名] が付きます。メモと説明書は「⭐ お気に入り」の「ダウンロード履歴」に残り、そこから .txt で保存できます</li></ol>
    <div class="note">Mac用のアプリはiPhoneでは動きません。Macに移してから開いてください。</div>
    <div class="row" style="justify-content:flex-end"><button class="btn" id="hClose">閉じる</button></div>`;
   $("hClose").onclick = ()=>$("dlModal").classList.remove("on");
@@ -1003,7 +1396,8 @@ $("gemTest").onclick = async ()=>{
   }finally{ clearInterval(timer); gemProgress = null; }
   renderUsage(); updateAiMode();
 };
-[$("setModal"),$("dlModal")].forEach(m=>m.addEventListener("click",e=>{ if(e.target===m) m.classList.remove("on"); }));
+[$("setModal"),$("dlModal")].forEach(m=>m.addEventListener("click",e=>{ if(e.target===m && !(m.id==="dlModal" && dlBusy)) m.classList.remove("on"); }));
+$("histQ").oninput = renderHist;
 $("bellBtn").onclick = openNotices;
 let tabBeforeFav = "ai";
 function currentTab(){ return $("tabs").querySelector(".tab.on")?.dataset.t || "ai"; }
@@ -1029,6 +1423,7 @@ $("expBtn").onclick = exportData;
 $("impFile").onchange = e=>{ const f=e.target.files[0]; if(f) importData(f); e.target.value=""; };
 $("helpBtn").onclick = openHelp;
 renderUsage(); updateAiMode(); checkUpdate(false); renderNotices(); renderFavs();
+loadParent();
 loadDangerList();
 checkFavUpdates(false);
 </script>
