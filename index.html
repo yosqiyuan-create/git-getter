@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.9.0">
+<meta name="app-version" content="1.9.1">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -235,7 +235,7 @@ pre.manual{white-space:pre-wrap;font-family:inherit;font-size:14px;background:#f
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.9.0";
+const APP_VERSION = "1.9.1";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -917,9 +917,9 @@ function makeZip(files){
   return new Blob([...parts, ...central, e.buffer], {type:"application/zip"});
 }
 const SRC_MAX_FILES = 2000, SRC_MAX_BYTES = 150e6;
-async function buildSourceZip(repo, onProg){
+async function buildSourceZip(repo, onProg, sha){
   const br = String(repo.default_branch);
-  const t = await gh(`/repos/${repo.full_name}/git/trees/${encodeURIComponent(br)}?recursive=1`);
+  const t = await gh(`/repos/${repo.full_name}/git/trees/${sha || encodeURIComponent(br)}?recursive=1`);
   if(!t || t.truncated) throw new Error("ファイルの数が多すぎます");
   const blobs = (t.tree||[]).filter(x=>x.type==="blob");
   const total = blobs.reduce((s,x)=>s+(x.size||0), 0);
@@ -931,7 +931,7 @@ async function buildSourceZip(repo, onProg){
   async function worker(){
     while(next < blobs.length){
       const k = next++; const b = blobs[k];
-      const r = await fetchHead(`https://raw.githubusercontent.com/${repo.full_name}/refs/heads/${enc(br)}/${enc(b.path)}`, 60000);
+      const r = await fetchHead(`https://raw.githubusercontent.com/${repo.full_name}/${sha || "refs/heads/" + enc(br)}/${enc(b.path)}`, 60000);
       if(!r.ok) throw new Error(`「${b.path}」を取得できませんでした（${r.status}）`);
       out[k] = {path: root + b.path, data: new Uint8Array(await r.arrayBuffer()), exec: b.mode === "100755"};
       done++; if(onProg) onProg(done, blobs.length);
@@ -943,7 +943,29 @@ async function buildSourceZip(repo, onProg){
 
 /* ---- Text files ---- */
 function memoText(x){
-  return `アプリ名：${x.app}\nリポジトリURL：${x.url}\nダウンロード日付：${x.date}\n行き先フォルダ名：${x.dest}\nファイル：${x.file}\n\nメモ：\n${x.memo || "（なし）"}\n`;
+  return `アプリ名：${x.app}\nリポジトリURL：${x.url}\nダウンロード日付：${x.date}\n行き先フォルダ名：${x.dest}\nファイル：${x.file}\n${x.ver?`バージョン：${x.ver}\n`:""}\nメモ：\n${x.memo || "（なし）"}\n`;
+}
+/* メモ.txt keeps one section per file: the same file again replaces its section, another version adds a section */
+const MEMO_SEP = "\n------------------------------\n";
+function mergeMemo(old, add, file){
+  if(!old) return add;
+  const secs = old.replace(/^\uFEFF/,"").split(MEMO_SEP).map(s=>s.trim()).filter(Boolean).filter(s=>!s.includes(`\nファイル：${file}\n`));
+  secs.push(add.trim());
+  return secs.join(MEMO_SEP) + "\n";
+}
+async function readText(dir, name){ try{ return await (await (await dir.getFileHandle(name)).getFile()).text(); }catch(e){ return null; } }
+async function fileSize(dir, name){ try{ return (await (await dir.getFileHandle(name)).getFile()).size; }catch(e){ return -1; } }
+const addVer = (name, ver) => { const m = name.match(/(\.tar\.(gz|xz|bz2)|\.[A-Za-z0-9]{1,5})$/); const v = "_" + safeName(ver); return m ? name.slice(0, -m[0].length) + v + m[0] : name + v; };
+/* Exactly the same thing already there -> overwrite it. A different version -> save next to it under a name with the version. */
+async function chooseTarget(dir, name, ver, size, full, dest){
+  const have = await fileSize(dir, name);
+  if(have < 0) return {name, same:null};
+  const prev = LS.get("downloads", []).find(x=>x.repo===full && x.dest && sameName(x.dest, dest) && x.file===name && x.mode==="folder");
+  const verSame = !ver || !prev || !prev.ver || prev.ver === ver;
+  const sizeSame = !size || have === size;
+  if(verSame && sizeSame) return {name, same:true};
+  const vn = addVer(name, ver || jstStamp().slice(0,10));
+  return {name: vn, same: (await fileSize(dir, vn)) >= 0 ? true : false};
 }
 async function makeManual(repo, readme){
   if(!readme){ try{ readme = (await gh(`/repos/${repo.full_name}/readme`, "application/vnd.github.raw")) || ""; }catch(e){ readme = ""; } }
@@ -982,7 +1004,7 @@ function manualFailText(repo, e){
 
 /* ---- "Already downloaded" marks ---- */
 const dlOf = full => LS.get("downloads", []).filter(x=>x.repo===full);
-const sameFile = (x, fname) => (x.file || x.name) === fname || String(x.name||"").endsWith("] " + fname);
+const sameFile = (x, fname) => (x.file || x.name) === fname || x.orig === fname || String(x.name||"").endsWith("] " + fname);
 const dlFor = (full, fname) => dlOf(full).filter(x=>sameFile(x, fname));
 const mmdd = at => at ? jstStamp(new Date(at)).slice(5,10).replace("-","/") : "";
 function dlMark(full, inline){
@@ -992,7 +1014,7 @@ function dlMark(full, inline){
 }
 function fileMark(full, fname){
   const l = dlFor(full, fname); if(!l.length) return "";
-  return `<span class="dlmark">✅ 済 ${esc(mmdd(l[0].at))}${l[0].dest?` 📁${esc(l[0].dest)}`:""}</span> `;
+  return `<span class="dlmark">✅ 済 ${esc(mmdd(l[0].at))}${l[0].ver?` ${esc(l[0].ver)}`:""}${l[0].dest?` 📁${esc(l[0].dest)}`:""}</span> `;
 }
 function dlBox(full){
   const l = dlOf(full); if(!l.length) return "";
@@ -1194,10 +1216,20 @@ async function startDownload(a){
       appDir = await getSubDir(destDir, appName);
     }catch(e){ $("pGo").disabled = false; $("pErr").innerHTML = `<div class="msg err">${esc(folderErrJa(e))}</div>`; renderWhere(a); return; }
   }
+  // which version is this?  source zip: date + commit id of the main branch / release file: release tag
+  let ver = "", target = a.name, same = null; const orig = a.name;
+  if(a._src){
+    try{
+      const c = await gh(`/repos/${repo.full_name}/commits/${encodeURIComponent(repo.default_branch)}`);
+      if(c?.sha){ ver = `${(c.commit?.committer?.date||"").slice(0,10)}_${c.sha.slice(0,7)}`; target = a.name.replace(/\.zip$/i, `_${ver}.zip`); a = Object.assign({}, a, {_sha: c.sha}); }
+    }catch(e){}
+  } else ver = cur.rel?.tag_name || "";
+  if(appDir){ try{ const r = await chooseTarget(appDir, target, ver, a.size, repo.full_name, destName); target = r.name; same = r.same; }catch(e){} }
+  a = Object.assign({}, a, {name: target, dlName: orig});
   dlBusy = true; LS.set("lastDest", destName);
   const now = new Date();
   const entry = {id: now.getTime()+"-"+Math.random().toString(36).slice(2,7), at: now.toISOString(), repo: repo.full_name, app: repo.name, url: repo.html_url,
-    name: a.name, file: a.name, dest: destName, memo, root: "github", path: appDir ? `${rootName}/${destName}/${appDir.name}` : "", mode: CAN_FOLDER ? "folder" : "prefix", manual:"", manualSrc:""};
+    name: a.name, file: a.name, orig, ver, dest: destName, memo, root: "github", path: appDir ? `${rootName}/${destName}/${appDir.name}` : "", mode: CAN_FOLDER ? "folder" : "prefix", manual:"", manualSrc:""};
   saveHist(entry);
 
   const s = $("dlSheet");
@@ -1211,8 +1243,8 @@ async function startDownload(a){
   const step = (k, st, text) => { $("i"+k).innerHTML = ICON[st]; if(text !== undefined) $("t"+k).textContent = text; };
 
   // memo
-  const mText = memoText({app: repo.name, url: repo.html_url, date: jstStamp(now), dest: destName, file: a.name, memo});
-  if(appDir){ try{ await writeText(appDir, "メモ.txt", mText); step("Memo","ok","保存しました"); }catch(e){ step("Memo","err", folderErrJa(e)); } }
+  const mText = memoText({app: repo.name, url: repo.html_url, date: jstStamp(now), dest: destName, file: a.name, ver, memo});
+  if(appDir){ try{ const old = await readText(appDir, "メモ.txt"); await writeText(appDir, "メモ.txt", mergeMemo(old, mText, a.name)); step("Memo","ok", old ? "前からあるメモ.txtに、この分を書き足しました（同じファイルの分は書き直し）" : "保存しました"); }catch(e){ step("Memo","err", folderErrJa(e)); } }
   else step("Memo","ok","このアプリの履歴に残しました");
 
   // manual (Muse text has priority; a failure never stops the app download)
@@ -1229,7 +1261,7 @@ async function startDownload(a){
   })();
 
   // app body
-  const bodyP = downloadBody(a, {repo, appDir, destName, entry, step}).catch(e=>{ step("Body","err","ダウンロードできませんでした：" + (e.message||e)); });
+  const bodyP = downloadBody(a, {repo, appDir, destName, entry, step, same}).catch(e=>{ step("Body","err","ダウンロードできませんでした：" + (e.message||e)); });
 
   await Promise.all([manualP, bodyP]);
   dlBusy = false;
@@ -1238,18 +1270,20 @@ async function startDownload(a){
   s.querySelector("h2").textContent = "終わりました";
 }
 async function downloadBody(a, ctx){
-  const {repo, appDir, destName, entry, step} = ctx;
+  const {repo, appDir, destName, entry, step, same} = ctx;
   const prefName = `[${destName}] ${a.name}`;
+  const savedMsg = () => same === true ? `同じ物があったので「${a.name}」を上書きしました`
+    : same === false ? `別のバージョンなので「${a.name}」として保存しました（前のバージョンも残っています）` : `「${a.name}」を保存しました`;
   const done = (mode, text) => { entry.mode = mode; saveHist(entry); step("Body", mode==="wait" ? "wait" : "ok", text); };
   if(a._src){
     // source code: collect the files and make the zip here
     let blob = null;
     try{
       step("Body","work","ソースコードを集めています…");
-      blob = await buildSourceZip(repo, (d,n)=>step("Body","work",`ソースコードを集めています… ${d}/${n}ファイル`));
+      blob = await buildSourceZip(repo, (d,n)=>step("Body","work",`ソースコードを集めています… ${d}/${n}ファイル`), a._sha);
     }catch(e){ step("Body","work",`この中ではまとめられなかったので、GitHubから直接落とします（${e.message||e}）`); }
     if(blob){
-      if(appDir){ try{ await writeData(appDir, a.name, blob); }catch(e){ throw new Error(folderErrJa(e)); } done("folder", "行き先フォルダに保存しました"); return; }
+      if(appDir){ try{ await writeData(appDir, a.name, blob); }catch(e){ throw new Error(folderErrJa(e)); } done("folder", savedMsg()); return; }
       saveBlob(blob, prefName); entry.name = prefName; done("prefix", `「${prefName}」として保存しました`); return;
     }
   } else {
@@ -1257,7 +1291,7 @@ async function downloadBody(a, ctx){
     try{
       const r = await fetchHead(a.browser_download_url, 15000);
       if(r.ok){
-        if(appDir){ await writeResponse(appDir, a.name, r, (g,t)=>step("Body","work",`ダウンロード中… ${t?Math.floor(g*100/t)+"%":fmtMB(g)}`)); done("folder","行き先フォルダに保存しました"); return; }
+        if(appDir){ await writeResponse(appDir, a.name, r, (g,t)=>step("Body","work",`ダウンロード中… ${t?Math.floor(g*100/t)+"%":fmtMB(g)}`)); done("folder", savedMsg()); return; }
         step("Body","work","ダウンロード中…"); saveBlob(await r.blob(), prefName); entry.name = prefName; done("prefix", `「${prefName}」として保存しました`); return;
       }
     }catch(e){ /* expected: GitHub does not allow web pages to read release files */ }
@@ -1265,11 +1299,11 @@ async function downloadBody(a, ctx){
   // ordinary browser download (original name, into the usual Downloads folder)
   plainDownload(a.browser_download_url);
   if(!appDir){
-    done("plain", IS_IOS ? `「${a.name}」の名前で保存されます。Safariの「ダウンロードしますか？」で「ダウンロード」を押してください（保存先：iCloud Drive）。`
-                         : `「${a.name}」の名前で、普段の「ダウンロード」フォルダに保存されます。`);
+    done("plain", IS_IOS ? `「${a.dlName}」の名前で保存されます。Safariの「ダウンロードしますか？」で「ダウンロード」を押してください（保存先：iCloud Drive）。`
+                         : `「${a.dlName}」の名前で、普段の「ダウンロード」フォルダに保存されます。`);
     return;
   }
-  done("wait", `いつもの「ダウンロード」フォルダに落としています。終わったら下のボタンを押して、「${a.name}」を選んでください。行き先フォルダにコピーします。`);
+  done("wait", `いつもの「ダウンロード」フォルダに落としています。終わったら下のボタンを押して、「${a.dlName}」を選んでください。行き先フォルダに「${a.name}」として入れます。`);
   await new Promise(resolve=>{
     $("actBody").innerHTML = `<div class="row" style="margin-top:6px"><button class="btn sm" id="mvGo">ファイルを選んで移す</button><button class="btn sub sm" id="mvSkip">あとで自分で移す</button></div>`;
     $("mvSkip").onclick = ()=>{ $("actBody").innerHTML = ""; step("Body","wait",`「ダウンロード」フォルダにあります。必要なら Finder で「${entry.path.split("/").slice(1).join(" ／ ")}」へ移してください。`); resolve(); };
@@ -1277,11 +1311,11 @@ async function downloadBody(a, ctx){
       try{
         const [h] = await window.showOpenFilePicker({id:"gitgetter-dl", startIn:"downloads", multiple:false});
         const f = await h.getFile();
-        if(f.name !== a.name && !confirm(`選んだのは「${f.name}」です。「${a.name}」として行き先フォルダに入れますか？`)) return;
+        if(f.name !== a.dlName && !confirm(`選んだのは「${f.name}」です。「${a.name}」として行き先フォルダに入れますか？`)) return;
         step("Body","work","行き先フォルダにコピーしています…");
         await writeData(appDir, a.name, f);
         $("actBody").innerHTML = "";
-        done("folder", "行き先フォルダに入れました（「ダウンロード」フォルダの元のファイルは消してかまいません）");
+        done("folder", savedMsg() + "（「ダウンロード」フォルダの元のファイルは消してかまいません）");
         resolve();
       }catch(e){ if(e.name !== "AbortError") step("Body","err", folderErrJa(e)); }
     };

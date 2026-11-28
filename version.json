@@ -1,7 +1,7 @@
 {
  "id": "git-getter",
  "name": "Git Getter",
- "version": "1.9.0",
+ "version": "1.9.1",
  "date": "2026-11-28",
- "notes": "保存先を iCloud Drive／GitHub／行き先／アプリ名 に変更、説明書のファイル名をアプリ名.txtに"
+ "notes": "全く同じ物は上書き、別バージョンはバージョン名付きで並べて保存"
 }
