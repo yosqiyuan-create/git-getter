@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.9.3">
+<meta name="app-version" content="1.9.4">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -235,7 +235,7 @@ pre.manual{white-space:pre-wrap;font-family:inherit;font-size:14px;background:#f
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.9.3";
+const APP_VERSION = "1.9.4";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -1189,7 +1189,7 @@ function renderWhere(a, pathOnly){
     if(pathOnly && $("pPath")){ $("pPath").textContent = a._src ? fname : a.name; return; }
     h = `<div class="where">
       <div>保存される名前：<span class="path" id="pPath">${esc(a._src ? fname : a.name)}</span></div>
-      <div class="note">この環境（iPhone・Safari・Pake版）ではフォルダを作れないため、ファイル名の頭に [行き先フォルダ名] を付けて保存します。リポジトリのZIPと説明書（[行き先] アプリ名.txt）をダウンロードします。メモはこのアプリの履歴に残ります（履歴から .txt で保存もできます）。${IS_IOS ? "保存先は設定どおり iCloud Drive です。" : ""}</div>
+      <div class="note">この環境（iPhone・Safari・Pake版）ではフォルダを作れないため、ファイル名の頭に [行き先フォルダ名] を付けて保存します。リポジトリのZIPと説明書（[行き先] アプリ名.txt）をダウンロードします。メモはこのアプリの履歴に残ります（履歴から .txt で保存もできます）。${IS_IOS ? "準備ができたら「iPhoneに保存」ボタンが出ます。押して「ファイルに保存」で保存先を選んでください。" : ""}</div>
       ${a._src ? "" : `<div class="note" style="margin-top:6px">※ 完成品ファイル（.dmg など）は、GitHubの決まりでWebアプリから名前を変えられないため、元の名前のまま保存されます。</div>`}
     </div>`;
   }
@@ -1242,7 +1242,29 @@ async function startDownload(a){
     <div class="runrow"><span class="ri" id="iBody"><span class="spin"></span></span><div style="flex:1"><b>アプリ本体</b>（${esc(a.name)}）<div class="note" id="tBody">準備しています…</div><div id="actBody"></div></div></div>
     <div class="runrow"><span class="ri" id="iMemo"><span class="spin"></span></span><div style="flex:1"><b>メモ.txt</b><div class="note" id="tMemo"></div></div></div>
     <div class="runrow"><span class="ri" id="iMan"><span class="spin"></span></span><div style="flex:1"><b>説明書（${esc(manualFile(appName))}）</b><div class="note" id="tMan">${muse.trim() ? "Museの説明書を使います" : "READMEからGeminiが作っています…（最大1分ほど）"}</div><div id="actMan"></div></div></div>
+    <div id="iosSave"></div>
     <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="rClose" disabled>閉じる</button></div>`;
+  /* iPhone: downloads started by a web page (above all from a home-screen app) are blocked, so the files are kept here
+     and saved with a button tap: the share menu's 「ファイルに保存」 lets the user pick the folder. */
+  const keep = {};
+  const iosRender = () => {
+    const list = Object.values(keep); if(!list.length) return;
+    const files = list.map(k=>new File([k.blob], k.name, {type: k.blob.type || "application/octet-stream"}));
+    const canShare = !!(navigator.share && (!navigator.canShare || navigator.canShare({files})));
+    const waitMan = !keep.man;
+    $("iosSave").innerHTML = `<div class="msg info" style="margin-top:10px"><b>👇 ボタンを押して iPhone に保存してください</b><br>
+      ${canShare ? "「iPhoneに保存」→ メニューの「ファイルに保存」→ 保存するフォルダ（例：このiPhone内 ／ ダウンロード）を選んで「保存」。" : ""}
+      ${waitMan ? "<br>説明書はまだ作っています。できたらここに出ます。" : ""}
+      <div class="row" style="margin-top:8px">
+        ${canShare ? `<button class="btn" id="iosShare">📥 iPhoneに保存（${list.length}つ）</button>` : ""}
+        ${list.map((k,i)=>`<button class="btn sub sm" data-ios="${i}">${esc(k.label)}をダウンロード</button>`).join("")}
+      </div></div>`;
+    if($("iosShare")) $("iosShare").onclick = async ()=>{
+      try{ await navigator.share({files}); }
+      catch(e){ if(e.name !== "AbortError") $("iosSave").insertAdjacentHTML("beforeend", `<div class="msg warn">共有メニューが開けませんでした。下の「ダウンロード」ボタンを使ってください。</div>`); }
+    };
+    $("iosSave").querySelectorAll("[data-ios]").forEach(b=>b.onclick=()=>{ const k = list[+b.dataset.ios]; saveBlob(k.blob, k.name); });
+  };
   const ICON = {ok:"✅", err:"⚠️", wait:"👉", work:'<span class="spin"></span>'};
   const step = (k, st, text) => { $("i"+k).innerHTML = ICON[st]; if(text !== undefined) $("t"+k).textContent = text; };
 
@@ -1263,6 +1285,10 @@ async function startDownload(a){
     let where = "保存しました";
     if(!appDir){
       const mName = `[${destName}] ${manualFile(appName)}`;
+      if(IS_IOS){
+        keep.man = {blob: new Blob([BOM + m.text], {type:"text/plain;charset=utf-8"}), name: mName, label: "説明書"};
+        iosRender(); step("Man", m.src === "failed" ? "err" : "wait", `「${mName}」の準備ができました。下のボタンで保存してください。`); return;
+      }
       saveTextFile(m.text, mName);
       where = `「${mName}」としてダウンロードしました（出てこないときは下のボタン）`;
       $("actMan").innerHTML = `<div class="row" style="margin-top:6px"><button class="btn sub sm" id="manAgain">説明書をもう一度ダウンロード</button></div>`;
@@ -1273,7 +1299,7 @@ async function startDownload(a){
   })();
 
   // app body
-  const bodyP = downloadBody(a, {repo, appDir, destName, entry, step, same}).catch(e=>{ step("Body","err","ダウンロードできませんでした：" + (e.message||e)); });
+  const bodyP = downloadBody(a, {repo, appDir, destName, entry, step, same, keepIos: (blob, name)=>{ keep.zip = {blob, name, label:"ZIP"}; iosRender(); }}).catch(e=>{ step("Body","err","ダウンロードできませんでした：" + (e.message||e)); });
 
   await Promise.all([manualP, bodyP]);
   dlBusy = false;
@@ -1282,7 +1308,7 @@ async function startDownload(a){
   s.querySelector("h2").textContent = "終わりました";
 }
 async function downloadBody(a, ctx){
-  const {repo, appDir, destName, entry, step, same} = ctx;
+  const {repo, appDir, destName, entry, step, same, keepIos} = ctx;
   const prefName = `[${destName}] ${a.name}`;
   const savedMsg = () => same === true ? `同じ物があったので「${a.name}」を上書きしました`
     : same === false ? `別のバージョンなので「${a.name}」として保存しました（前のバージョンも残っています）` : `「${a.name}」を保存しました`;
@@ -1296,7 +1322,9 @@ async function downloadBody(a, ctx){
     }catch(e){ step("Body","work",`この中ではまとめられなかったので、GitHubから直接落とします（${e.message||e}）`); }
     if(blob){
       if(appDir){ try{ await writeData(appDir, a.name, blob); }catch(e){ throw new Error(folderErrJa(e)); } done("folder", savedMsg()); return; }
-      saveBlob(blob, prefName); entry.name = prefName; done("prefix", `「${prefName}」として保存しました`); return;
+      entry.name = prefName;
+      if(IS_IOS){ keepIos(blob, prefName); entry.mode = "prefix"; saveHist(entry); step("Body","wait",`「${prefName}」の準備ができました。下のボタンで保存してください。`); return; }
+      saveBlob(blob, prefName); done("prefix", `「${prefName}」として保存しました`); return;
     }
   } else {
     // release file: try reading it directly (works only if GitHub ever allows it)

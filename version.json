@@ -1,7 +1,7 @@
 {
  "id": "git-getter",
  "name": "Git Getter",
- "version": "1.9.3",
+ "version": "1.9.4",
  "date": "2026-11-28",
- "notes": "iPhoneでもZIPと説明書（アプリ名.txt）をダウンロードフォルダに保存"
+ "notes": "iPhoneで保存できない問題を修正（ボタン＋「ファイルに保存」で保存）"
 }
