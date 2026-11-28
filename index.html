@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.8.1">
+<meta name="app-version" content="1.9.0">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -235,7 +235,7 @@ pre.manual{white-space:pre-wrap;font-family:inherit;font-size:14px;background:#f
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.8.1";
+const APP_VERSION = "1.9.0";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -821,6 +821,15 @@ async function pickParent(){
   parentDir = h; try{ await IDB.set("parentDir", h); }catch(e){}
   return h;
 }
+/* Everything goes into iCloud Drive / GitHub / <destination> / <app name>.
+   The picked folder may be iCloud Drive itself (GitHub is made inside it) or the GitHub folder. */
+const ROOT_NAME = "GitHub";
+async function getRootDir(){
+  if(sameName(parentDir.name, ROOT_NAME)) return parentDir;
+  return getSubDir(parentDir, ROOT_NAME);
+}
+const rootLabel = () => !parentDir ? "iCloud Drive ／ GitHub" : (sameName(parentDir.name, ROOT_NAME) ? ROOT_NAME : `${parentDir.name} ／ ${ROOT_NAME}`);
+const manualFile = app => `${app}.txt`;   // the manual is named after the app (not 説明書.txt)
 async function ensureParentPermission(){
   if(!parentDir) return false;
   const o = {mode:"readwrite"};
@@ -1005,11 +1014,12 @@ function openManualEditor(id){
   const x = LS.get("downloads", []).find(e=>e.id===id);
   if(!x){ alert("この履歴は古い形式のため、説明書を作れません。もう一度ダウンロードしてください。"); return; }
   const toFolder = CAN_FOLDER && !!x.dest && !!x.path;
+  const mName = x.root === "github" ? manualFile(entryFolderName(x)) : "説明書.txt";   // entries from v1.8.0/1.8.1 used 説明書.txt
   const s = $("dlSheet"); $("dlModal").classList.add("on");
   s.innerHTML = `<h2>📘 説明書を作る・貼る</h2>
     <div class="note" style="word-break:break-all">${esc(x.repo)} ／ ${esc(x.file || x.name)}</div>
-    <div class="where" style="margin:8px 0">保存先：<span class="path">${toFolder ? "📁 " + esc(x.path.split("/").join(" ／ ")) + " ／ 説明書.txt"
-      : esc(`[${x.dest||"未分類"}] ${entryFolderName(x)}_説明書.txt`) + "（ダウンロードとして保存）"}</span>
+    <div class="where" style="margin:8px 0">保存先：<span class="path">${toFolder ? "📁 " + esc(x.path.split("/").join(" ／ ")) + " ／ " + esc(mName)
+      : esc(`[${x.dest||"未分類"}] ${manualFile(entryFolderName(x))}`) + "（ダウンロードとして保存）"}</span>
       ${x.manual?`<div class="note">今の説明書（${esc({muse:"Museの説明書",gemini:"自動で作成",failed:"作れなかった"}[x.manualSrc]||"")}）は上書きされます。</div>`:""}</div>
     <div class="field"><label>Museの説明書を貼る欄（コピペした説明書を保存するときはここに貼ってください）</label>
       <textarea id="eMuse" style="min-height:140px" placeholder="アシスタントが作った説明書をここに貼る"></textarea></div>
@@ -1033,15 +1043,16 @@ function openManualEditor(id){
       }
       const text = await getText();
       if(toFolder){
-        const destDir = await getSubDir(parentDir, x.dest);
+        const base = x.root === "github" ? await getRootDir() : parentDir;
+        const destDir = await getSubDir(base, x.dest);
         dir = await getSubDir(destDir, entryFolderName(x));
-        await writeText(dir, "説明書.txt", text);
+        await writeText(dir, mName, text);
       } else {
-        saveTextFile(text, `[${x.dest||"未分類"}] ${entryFolderName(x)}_説明書.txt`);
+        saveTextFile(text, `[${x.dest||"未分類"}] ${manualFile(entryFolderName(x))}`);
       }
       const l = LS.get("downloads", []); const e = l.find(y=>y.id===x.id);
       if(e){ e.manual = text.slice(0,20000); e.manualSrc = src; LS.set("downloads", l); }
-      msg(toFolder ? "✅ 説明書.txt を保存しました（フォルダの中の説明書を入れ替えました）" : "✅ 説明書.txt を保存しました（ダウンロードを確認してください）");
+      msg(toFolder ? `✅ ${esc(mName)} を保存しました（フォルダの中の説明書を入れ替えました）` : `✅ 説明書（${esc(manualFile(entryFolderName(x)))}）を保存しました（ダウンロードを確認してください）`);
       renderHist(); if(current && current.repo.full_name===x.repo && !$("detailView").classList.contains("hidden")) renderDetail();
     }catch(e){
       msg(esc(e?.name && e.name!=="Error" ? folderErrJa(e) : ("説明書は生成できませんでした：" + (e.message==="GEMINI_LIMIT" ? "Geminiの今日の上限に達しました" : e.message))), "err");
@@ -1087,7 +1098,7 @@ function renderHist(){
       <div class="row" style="margin-top:4px">
         ${x.manual?`<button class="btn sub sm" data-hm="${i}">説明書を見る</button>`:""}
         ${x.repo?`<button class="btn sub sm" data-hx="${i}">📘 説明書を作る・貼る</button>`:""}
-        ${x.dest && x.mode!=="folder"?`<button class="btn sub sm" data-hs="${i}">メモ.txt・説明書.txt を保存</button>`:""}
+        ${x.dest && x.mode!=="folder"?`<button class="btn sub sm" data-hs="${i}">メモ・説明書を .txt で保存</button>`:""}
         ${x.repo?`<button class="btn sub sm" data-ho="${i}">アプリを開く</button>`:""}
       </div></div>`;
   }).join("") : `<div class="note">${q ? "見つかりませんでした。" : "まだありません。"}</div>`;
@@ -1100,7 +1111,7 @@ function histMemo(x){ return memoText({app:x.app || (x.repo||"").split("/")[1] |
 function saveHistTexts(x){
   const app = safeName(x.app || (x.repo||"").split("/")[1] || "app");
   saveTextFile(histMemo(x), `[${x.dest}] ${app}_メモ.txt`);
-  if(x.manual) setTimeout(()=>saveTextFile(x.manual, `[${x.dest}] ${app}_説明書.txt`), 800);
+  if(x.manual) setTimeout(()=>saveTextFile(x.manual, `[${x.dest}] ${manualFile(app)}`), 800);
 }
 function showManual(x){
   const s = $("dlSheet"); $("dlModal").classList.add("on");
@@ -1134,14 +1145,16 @@ function renderWhere(a, pathOnly){
   const app = safeName(current.repo.name);
   let h;
   if(CAN_FOLDER){
-    const path = parentDir ? `📁 ${esc(parentDir.name)} ／ ${esc(dest)} ／ ${esc(app)}` : `📁 （親フォルダ） ／ ${esc(dest)} ／ ${esc(app)}`;
+    const path = `📁 ${esc(rootLabel())} ／ ${esc(dest)} ／ ${esc(app)}`;
     if(pathOnly && $("pPath")){ $("pPath").innerHTML = path; return; }
     h = `<div class="where">
       <div>保存先：<span class="path" id="pPath">${path}</span></div>
-      <div class="note">この中に「${esc(a.name)}」「メモ.txt」「説明書.txt」を入れます。行き先フォルダが既にあれば、それを使います。</div>
-      ${parentDir ? `<div class="row" style="margin-top:6px"><button class="btn sub sm" id="pPick">親フォルダを変える</button></div>`
-        : `<div class="msg info" style="margin:8px 0 0"><b>最初の1回だけ、親フォルダを選びます。</b><br>
-          選ぶ画面の左側で「iCloud Drive」を押し、その中に「GitGetter」などのフォルダを作って（左下の「新規フォルダ」）、そのフォルダを選んで「開く」を押してください。iCloud Driveの中にしておくと、iPhoneの「ファイル」アプリからも同じフォルダが見られます。<br>
+      <div class="note">この中に「${esc(a.name)}」「${esc(manualFile(app))}」（説明書）「メモ.txt」を入れます。行き先フォルダ・アプリ名フォルダが既にあれば、それを使います。</div>
+      ${parentDir ? `<div class="row" style="margin-top:6px"><button class="btn sub sm" id="pPick">保存場所を選び直す</button></div>`
+        : `<div class="msg info" style="margin:8px 0 0"><b>最初の1回だけ、保存場所を選びます。</b><br>
+          選ぶ画面の左側で「iCloud Drive」を押し、そのまま「開く」を押してください。中に「GitHub」フォルダを自動で作ります（既にあればそれを使います）。<br>
+          もし「このフォルダは開けません」と出たら、iCloud Driveの中に「GitHub」フォルダを作って（左下の「新規フォルダ」）、その「GitHub」を選んで「開く」を押してください。<br>
+          iPhoneの「ファイル」アプリの iCloud Drive からも同じフォルダが見られます。<br>
           Chromeに「ファイルの編集を許可しますか？」と聞かれたら「編集を許可」（「毎回許可」があればそちら）を押してください。</div>`}
       ${a._src ? "" : `<div class="note" style="margin-top:6px">※ 完成品ファイルはGitHubの決まりでWebアプリから直接フォルダに入れられないため、いったん普段の「ダウンロード」フォルダに落ちます。終わったら「ファイルを選んで移す」を押すと、行き先フォルダに入れます。</div>`}
     </div>`;
@@ -1176,14 +1189,15 @@ async function startDownload(a){
     try{
       if(!parentDir) await pickParent();
       if(!(await ensureParentPermission())) throw Object.assign(new Error("not allowed"), {name:"NotAllowedError"});
-      const destDir = await getSubDir(parentDir, destName); destName = destDir.name;
+      const rootDir = await getRootDir(); var rootName = rootDir.name;
+      const destDir = await getSubDir(rootDir, destName); destName = destDir.name;
       appDir = await getSubDir(destDir, appName);
     }catch(e){ $("pGo").disabled = false; $("pErr").innerHTML = `<div class="msg err">${esc(folderErrJa(e))}</div>`; renderWhere(a); return; }
   }
   dlBusy = true; LS.set("lastDest", destName);
   const now = new Date();
   const entry = {id: now.getTime()+"-"+Math.random().toString(36).slice(2,7), at: now.toISOString(), repo: repo.full_name, app: repo.name, url: repo.html_url,
-    name: a.name, file: a.name, dest: destName, memo, path: appDir ? `${parentDir.name}/${destName}/${appDir.name}` : "", mode: CAN_FOLDER ? "folder" : "prefix", manual:"", manualSrc:""};
+    name: a.name, file: a.name, dest: destName, memo, root: "github", path: appDir ? `${rootName}/${destName}/${appDir.name}` : "", mode: CAN_FOLDER ? "folder" : "prefix", manual:"", manualSrc:""};
   saveHist(entry);
 
   const s = $("dlSheet");
@@ -1191,7 +1205,7 @@ async function startDownload(a){
     <div class="note" style="word-break:break-all">${esc(entry.path ? "📁 " + entry.path.split("/").join(" ／ ") : "行き先：" + destName)}</div>
     <div class="runrow"><span class="ri" id="iBody"><span class="spin"></span></span><div style="flex:1"><b>アプリ本体</b>（${esc(a.name)}）<div class="note" id="tBody">準備しています…</div><div id="actBody"></div></div></div>
     <div class="runrow"><span class="ri" id="iMemo"><span class="spin"></span></span><div style="flex:1"><b>メモ.txt</b><div class="note" id="tMemo"></div></div></div>
-    <div class="runrow"><span class="ri" id="iMan"><span class="spin"></span></span><div style="flex:1"><b>説明書.txt</b><div class="note" id="tMan">${muse.trim() ? "Museの説明書を使います" : "READMEからGeminiが作っています…（最大1分ほど）"}</div></div></div>
+    <div class="runrow"><span class="ri" id="iMan"><span class="spin"></span></span><div style="flex:1"><b>説明書（${esc(manualFile(appName))}）</b><div class="note" id="tMan">${muse.trim() ? "Museの説明書を使います" : "READMEからGeminiが作っています…（最大1分ほど）"}</div></div></div>
     <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="rClose" disabled>閉じる</button></div>`;
   const ICON = {ok:"✅", err:"⚠️", wait:"👉", work:'<span class="spin"></span>'};
   const step = (k, st, text) => { $("i"+k).innerHTML = ICON[st]; if(text !== undefined) $("t"+k).textContent = text; };
@@ -1208,7 +1222,7 @@ async function startDownload(a){
     else { try{ m = {src:"gemini", text: await makeManual(repo, cur.readme)}; }catch(e){ m = {src:"failed", text: manualFailText(repo, e)}; } }
     entry.manual = m.text.slice(0,20000); entry.manualSrc = m.src; saveHist(entry);
     let saved = !appDir;
-    if(appDir){ try{ await writeText(appDir, "説明書.txt", m.text); saved = true; }catch(e){ step("Man","err", folderErrJa(e)); return; } }
+    if(appDir){ try{ await writeText(appDir, manualFile(appDir.name), m.text); saved = true; }catch(e){ step("Man","err", folderErrJa(e)); return; } }
     const where = appDir ? "保存しました" : "このアプリの履歴に残しました";
     if(m.src === "failed") step("Man","err", `説明書は生成できませんでした（${m.text.split("\n")[1].replace("理由：","")}）。その旨を書いたファイルを${appDir?"入れました":"残しました"}。`);
     else step("Man", saved ? "ok" : "err", (m.src==="muse" ? "Museの説明書を" : "自動で作った説明書を") + where);
@@ -1442,7 +1456,7 @@ function openHelp(){
    <ol class="steps"><li>片方の端末で「⭐ お気に入り」→「書き出す」</li><li>保存先に「iCloud Drive」を選ぶ</li><li>もう一方の端末で「読み込む」→ そのファイルを選ぶ</li></ol>
    <h3>行き先フォルダ・メモ・説明書</h3>
    <ol class="steps"><li>「ダウンロード」を押すと、行き先フォルダ名・メモ・Museの説明書を貼る欄が出ます</li>
-   <li>MacのChromeでは「親フォルダ ／ 行き先フォルダ ／ アプリ名」の中に、アプリ本体・メモ.txt・説明書.txt を入れます（親フォルダは最初の1回だけ選びます。iCloud Driveの中のフォルダがおすすめ）</li>
+   <li>MacのChromeでは「iCloud Drive ／ GitHub ／ 行き先フォルダ ／ アプリ名」の中に、リポジトリのZIP・説明書（アプリ名.txt）・メモ.txt を入れます（最初の1回だけ iCloud Drive を選びます）</li>
    <li>iPhone・Safari・Pake版では、ファイル名の頭に [行き先フォルダ名] が付きます。メモと説明書は「⭐ お気に入り」の「ダウンロード履歴」に残り、そこから .txt で保存できます</li></ol>
    <div class="note">Mac用のアプリはiPhoneでは動きません。Macに移してから開いてください。</div>
    <div class="row" style="justify-content:flex-end"><button class="btn" id="hClose">閉じる</button></div>`;
