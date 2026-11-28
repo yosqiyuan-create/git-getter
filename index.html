@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.9.1">
+<meta name="app-version" content="1.9.2">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -235,7 +235,7 @@ pre.manual{white-space:pre-wrap;font-family:inherit;font-size:14px;background:#f
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.9.1";
+const APP_VERSION = "1.9.2";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -782,11 +782,14 @@ function renderDetail(){
       <span class="an">${esc(a.name)} ${fileMark(repo.full_name, a.name)}<span class="note">${fmtSize(a.size)}・${(a.download_count||0).toLocaleString()}回</span></span>
       <button class="btn ${a._os==="mac"?"":"sub"}" data-a="${i}">${dlFor(repo.full_name, a.name).length?"もう一度":"ダウンロード"}</button></div>`).join("")
       : `<div class="note">完成品（配布ファイル）はありません。</div>`}
-    <div class="asset"><span class="ostag">ソース</span><span class="an">ソースコード一式（アプリの設計図） ${fileMark(repo.full_name, zipName)}<br><span class="note">保存される名前：${esc(zipName)}</span></span>
+    <div class="asset"><span class="ostag">ソース</span><span class="an">ソースコード一式（アプリの設計図） ${fileMark(repo.full_name, zipName)}<br><span class="note">保存される名前：${esc(zipName.replace(/\.zip$/i,""))}_（日付_版の印）.zip</span></span>
       <button class="btn sub" id="zipBtn">${dlFor(repo.full_name, zipName).length?"もう一度":"ダウンロード"}</button></div>
+    <div class="field" style="margin-top:10px"><label>📘 Museの説明書を貼る欄（文章があれば自動の説明書は作らず、これを「${esc(safeName(repo.name))}.txt」としてアプリ名フォルダに保存します。空なら自動で作ります）</label>
+      <textarea id="dMuse" style="min-height:110px" placeholder="アシスタント（Muse）が作った説明書をここに貼る">${esc(museDraft[repo.full_name]||"")}</textarea></div>
     <div class="note" style="margin-top:8px">iPhoneでは保存先に「iCloud Drive」を選ぶと、家のMacに自動で同期されます。<a href="#" id="helpLink">保存のしかた</a></div>
   </div>`;
   $("detail").querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>openDlPrep(current.assets[+b.dataset.a]));
+  $("dMuse").oninput = e => { museDraft[repo.full_name] = e.target.value; };
   $("zipBtn").onclick = ()=> openDlPrep({name: zipName, browser_download_url: zipUrl, _src:true});
   $("helpLink").onclick = e=>{ e.preventDefault(); openHelp(); };
   $("starBtn").onclick = ()=>{ toggleFav(current); renderDetail(); };
@@ -1153,12 +1156,13 @@ function openDlPrep(a){
       <datalist id="destList">${knownDests().map(d=>`<option value="${esc(d)}">`).join("")}</datalist></div>
     <div class="field"><label>② メモ（自分用のメモ）</label><textarea id="pMemo" placeholder="例：Rokidで本を読むときに使う"></textarea></div>
     <div class="field"><label>③ Museの説明書を貼る欄（ここに文章があると、自動の説明書は作らずにこれを使います）</label>
-      <textarea id="pMuse" placeholder="アシスタントが作った説明書をここに貼る"></textarea></div>
+      <textarea id="pMuse" placeholder="アシスタントが作った説明書をここに貼る">${esc(museDraft[current.repo.full_name]||"")}</textarea></div>
     <div id="pWhere"></div>
     <div id="pErr"></div>
     <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn sub" id="pCancel">やめる</button><button class="btn" id="pGo">ダウンロード開始</button></div>`;
   renderWhere(a);
   $("pDest").oninput = ()=>renderWhere(a, true);
+  $("pMuse").oninput = e => { museDraft[current.repo.full_name] = e.target.value; if($("dMuse")) $("dMuse").value = e.target.value; };
   $("pCancel").onclick = ()=>$("dlModal").classList.remove("on");
   $("pGo").onclick = ()=>startDownload(a);
 }
@@ -1392,6 +1396,7 @@ function toggleFav(cur){
 }
 /* Translations: kept for this session, and saved into the favorite so it never falls back to English */
 const transCache = {};
+const museDraft = {};   // text pasted into the Muse box, kept per repository while the app is open
 function rememberJa(full, part){
   transCache[full] = Object.assign({}, transCache[full], part);
   const l = favs(); const f = l.find(x=>x.full===full); if(!f) return;
