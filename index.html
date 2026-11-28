@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.9.4">
+<meta name="app-version" content="1.9.5">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -235,7 +235,7 @@ pre.manual{white-space:pre-wrap;font-family:inherit;font-size:14px;background:#f
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.9.4";
+const APP_VERSION = "1.9.5";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -1246,15 +1246,17 @@ async function startDownload(a){
     <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="rClose" disabled>閉じる</button></div>`;
   /* iPhone: downloads started by a web page (above all from a home-screen app) are blocked, so the files are kept here
      and saved with a button tap: the share menu's 「ファイルに保存」 lets the user pick the folder. */
-  const keep = {};
+  const keep = {}; let iosLink = null;
   const iosRender = () => {
-    const list = Object.values(keep); if(!list.length) return;
+    const list = Object.values(keep); if(!list.length && !iosLink) return;
     const files = list.map(k=>new File([k.blob], k.name, {type: k.blob.type || "application/octet-stream"}));
-    const canShare = !!(navigator.share && (!navigator.canShare || navigator.canShare({files})));
+    const canShare = list.length > 0 && !!(navigator.share && (!navigator.canShare || navigator.canShare({files})));
     const waitMan = !keep.man;
     $("iosSave").innerHTML = `<div class="msg info" style="margin-top:10px"><b>👇 ボタンを押して iPhone に保存してください</b><br>
       ${canShare ? "「iPhoneに保存」→ メニューの「ファイルに保存」→ 保存するフォルダ（例：このiPhone内 ／ ダウンロード）を選んで「保存」。" : ""}
       ${waitMan ? "<br>説明書はまだ作っています。できたらここに出ます。" : ""}
+      ${iosLink ? `<div style="margin-top:8px"><a class="btn" href="${esc(iosLink.url)}" target="_blank" rel="noopener" id="iosLink">📦 アプリ本体をダウンロード</a>
+        <div class="note" style="margin-top:4px">${esc(iosLink.name)}<br>押すと「ダウンロードしますか？」と出るので「ダウンロード」を押してください。名前は元のままです（GitHubの決まりで変えられません）。</div></div>` : ""}
       <div class="row" style="margin-top:8px">
         ${canShare ? `<button class="btn" id="iosShare">📥 iPhoneに保存（${list.length}つ）</button>` : ""}
         ${list.map((k,i)=>`<button class="btn sub sm" data-ios="${i}">${esc(k.label)}をダウンロード</button>`).join("")}
@@ -1299,7 +1301,7 @@ async function startDownload(a){
   })();
 
   // app body
-  const bodyP = downloadBody(a, {repo, appDir, destName, entry, step, same, keepIos: (blob, name)=>{ keep.zip = {blob, name, label:"ZIP"}; iosRender(); }}).catch(e=>{ step("Body","err","ダウンロードできませんでした：" + (e.message||e)); });
+  const bodyP = downloadBody(a, {repo, appDir, destName, entry, step, same, keepIos: (blob, name)=>{ keep.zip = {blob, name, label:"ZIP"}; iosRender(); }, linkIos: (url, name)=>{ iosLink = {url, name}; iosRender(); }}).catch(e=>{ step("Body","err","ダウンロードできませんでした：" + (e.message||e)); });
 
   await Promise.all([manualP, bodyP]);
   dlBusy = false;
@@ -1308,7 +1310,7 @@ async function startDownload(a){
   s.querySelector("h2").textContent = "終わりました";
 }
 async function downloadBody(a, ctx){
-  const {repo, appDir, destName, entry, step, same, keepIos} = ctx;
+  const {repo, appDir, destName, entry, step, same, keepIos, linkIos} = ctx;
   const prefName = `[${destName}] ${a.name}`;
   const savedMsg = () => same === true ? `同じ物があったので「${a.name}」を上書きしました`
     : same === false ? `別のバージョンなので「${a.name}」として保存しました（前のバージョンも残っています）` : `「${a.name}」を保存しました`;
@@ -1337,6 +1339,13 @@ async function downloadBody(a, ctx){
     }catch(e){ /* expected: GitHub does not allow web pages to read release files */ }
   }
   // ordinary browser download (original name, into the usual Downloads folder)
+  if(IS_IOS && !appDir){
+    // iPhone blocks downloads the page starts by itself -> a button the user taps
+    linkIos(a.browser_download_url, a.dlName || a.name);
+    entry.mode = "plain"; saveHist(entry);
+    step("Body","wait","下の「📦 アプリ本体をダウンロード」を押してください。");
+    return;
+  }
   plainDownload(a.browser_download_url);
   if(!appDir){
     done("plain", IS_IOS ? `「${a.dlName}」の名前で保存されます。Safariの「ダウンロードしますか？」で「ダウンロード」を押してください（保存先：iCloud Drive）。`

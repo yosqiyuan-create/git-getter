@@ -1,7 +1,7 @@
 {
  "id": "git-getter",
  "name": "Git Getter",
- "version": "1.9.4",
+ "version": "1.9.5",
  "date": "2026-11-28",
- "notes": "iPhoneで保存できない問題を修正（ボタン＋「ファイルに保存」で保存）"
+ "notes": "iPhoneで完成品ファイル（.pkg/.dmgなど）を押してダウンロードできるボタンを追加"
 }
