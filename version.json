@@ -1,7 +1,7 @@
 {
  "id": "git-getter",
  "name": "Git Getter",
- "version": "1.9.2",
+ "version": "1.9.3",
  "date": "2026-11-28",
- "notes": "ダウンロード画面に「Museの説明書を貼る欄」を常に表示"
+ "notes": "iPhoneでもZIPと説明書（アプリ名.txt）をダウンロードフォルダに保存"
 }

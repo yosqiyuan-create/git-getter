@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.9.2">
+<meta name="app-version" content="1.9.3">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -235,7 +235,7 @@ pre.manual{white-space:pre-wrap;font-family:inherit;font-size:14px;background:#f
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.9.2";
+const APP_VERSION = "1.9.3";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -1189,7 +1189,7 @@ function renderWhere(a, pathOnly){
     if(pathOnly && $("pPath")){ $("pPath").textContent = a._src ? fname : a.name; return; }
     h = `<div class="where">
       <div>保存される名前：<span class="path" id="pPath">${esc(a._src ? fname : a.name)}</span></div>
-      <div class="note">この環境（iPhone・Safari・Pake版）ではフォルダを作れないため、ファイル名の頭に [行き先フォルダ名] を付けて保存します。メモと説明書はこのアプリの履歴に残ります（履歴から .txt として保存もできます）。${IS_IOS ? "保存先は設定どおり iCloud Drive です。" : ""}</div>
+      <div class="note">この環境（iPhone・Safari・Pake版）ではフォルダを作れないため、ファイル名の頭に [行き先フォルダ名] を付けて保存します。リポジトリのZIPと説明書（[行き先] アプリ名.txt）をダウンロードします。メモはこのアプリの履歴に残ります（履歴から .txt で保存もできます）。${IS_IOS ? "保存先は設定どおり iCloud Drive です。" : ""}</div>
       ${a._src ? "" : `<div class="note" style="margin-top:6px">※ 完成品ファイル（.dmg など）は、GitHubの決まりでWebアプリから名前を変えられないため、元の名前のまま保存されます。</div>`}
     </div>`;
   }
@@ -1241,7 +1241,7 @@ async function startDownload(a){
     <div class="note" style="word-break:break-all">${esc(entry.path ? "📁 " + entry.path.split("/").join(" ／ ") : "行き先：" + destName)}</div>
     <div class="runrow"><span class="ri" id="iBody"><span class="spin"></span></span><div style="flex:1"><b>アプリ本体</b>（${esc(a.name)}）<div class="note" id="tBody">準備しています…</div><div id="actBody"></div></div></div>
     <div class="runrow"><span class="ri" id="iMemo"><span class="spin"></span></span><div style="flex:1"><b>メモ.txt</b><div class="note" id="tMemo"></div></div></div>
-    <div class="runrow"><span class="ri" id="iMan"><span class="spin"></span></span><div style="flex:1"><b>説明書（${esc(manualFile(appName))}）</b><div class="note" id="tMan">${muse.trim() ? "Museの説明書を使います" : "READMEからGeminiが作っています…（最大1分ほど）"}</div></div></div>
+    <div class="runrow"><span class="ri" id="iMan"><span class="spin"></span></span><div style="flex:1"><b>説明書（${esc(manualFile(appName))}）</b><div class="note" id="tMan">${muse.trim() ? "Museの説明書を使います" : "READMEからGeminiが作っています…（最大1分ほど）"}</div><div id="actMan"></div></div></div>
     <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="rClose" disabled>閉じる</button></div>`;
   const ICON = {ok:"✅", err:"⚠️", wait:"👉", work:'<span class="spin"></span>'};
   const step = (k, st, text) => { $("i"+k).innerHTML = ICON[st]; if(text !== undefined) $("t"+k).textContent = text; };
@@ -1259,8 +1259,16 @@ async function startDownload(a){
     entry.manual = m.text.slice(0,20000); entry.manualSrc = m.src; saveHist(entry);
     let saved = !appDir;
     if(appDir){ try{ await writeText(appDir, manualFile(appDir.name), m.text); saved = true; }catch(e){ step("Man","err", folderErrJa(e)); return; } }
-    const where = appDir ? "保存しました" : "このアプリの履歴に残しました";
-    if(m.src === "failed") step("Man","err", `説明書は生成できませんでした（${m.text.split("\n")[1].replace("理由：","")}）。その旨を書いたファイルを${appDir?"入れました":"残しました"}。`);
+    // iPhone / Safari / Pake: the manual is downloaded as a file too, next to the zip
+    let where = "保存しました";
+    if(!appDir){
+      const mName = `[${destName}] ${manualFile(appName)}`;
+      saveTextFile(m.text, mName);
+      where = `「${mName}」としてダウンロードしました（出てこないときは下のボタン）`;
+      $("actMan").innerHTML = `<div class="row" style="margin-top:6px"><button class="btn sub sm" id="manAgain">説明書をもう一度ダウンロード</button></div>`;
+      $("manAgain").onclick = ()=>saveTextFile(m.text, mName);
+    }
+    if(m.src === "failed") step("Man","err", `説明書は生成できませんでした（${m.text.split("\n")[1].replace("理由：","")}）。その旨を書いたファイルを${appDir?"入れました":"ダウンロードしました"}。`);
     else step("Man", saved ? "ok" : "err", (m.src==="muse" ? "Museの説明書を" : "自動で作った説明書を") + where);
   })();
 
