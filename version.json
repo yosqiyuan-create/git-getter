@@ -1,7 +1,7 @@
 {
  "id": "git-getter",
  "name": "Git Getter",
- "version": "1.9.7",
+ "version": "1.9.8",
  "date": "2026-11-28",
- "notes": "iPhoneのダウンロード準備画面から行き先フォルダ名の欄を削除"
+ "notes": "GitHubトークンを保存したらすぐ確認し、残り回数の表示を更新"
 }

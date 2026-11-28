@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.9.7">
+<meta name="app-version" content="1.9.8">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -235,7 +235,7 @@ pre.manual{white-space:pre-wrap;font-family:inherit;font-size:14px;background:#f
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.9.7";
+const APP_VERSION = "1.9.8";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -359,6 +359,21 @@ async function gh(path, accept){
   if(res.status >= 500) throw new Error("GitHub側で一時的な問題が起きています。少し待ってからお試しください。");
   if(!res.ok) throw new Error("GitHubでエラーが起きました（番号 " + res.status + "）。もう一度お試しください。");
   return accept && accept.includes("raw") ? res.text() : res.json();
+}
+
+/* Ask GitHub how many calls are left (this check itself is free) and whether the token works */
+async function refreshRate(){
+  const c = cfg(); const headers = {"Accept":"application/vnd.github+json"};
+  if(c.ghToken) headers["Authorization"] = "Bearer " + c.ghToken.trim();
+  let res;
+  try{ res = await fetch("https://api.github.com/rate_limit", {headers, cache:"no-store"}); }catch(e){ return {ok:false, why:"net"}; }
+  if(res.status === 401){ ghTokenBad = !!c.ghToken; return {ok:false, why:"bad"}; }
+  if(!res.ok) return {ok:false, why:"http"+res.status};
+  const j = await res.json(); const r = j.resources || {};
+  if(r.core) ghRate.core = {remaining:r.core.remaining, limit:r.core.limit, reset:r.core.reset};
+  if(r.search) ghRate.search = {remaining:r.search.remaining, limit:r.search.limit, reset:r.search.reset};
+  renderUsage();
+  return {ok:true, limit: r.core?.limit || 0, token: !!c.ghToken};
 }
 
 /* ===== Gemini API ===== */
@@ -1424,6 +1439,15 @@ function saveSettings(){
     ghToken:$("sGhToken").value.trim(), warn:Math.min(100,Math.max(10,+$("sWarn").value||80))};
   if(c.gemKey!==old.gemKey){ LS.set("gemAuto",null); gemBlockedUntilDay=""; LS.set("gemBlocked",""); }
   LS.set("cfg", c); ghTokenBad = false; $("setModal").classList.remove("on"); renderUsage(); updateAiMode();
+  ghRate = {core:null, search:null}; renderUsage();
+  const tell = (m, k) => { status(esc(m), k); notify(m, k); };
+  refreshRate().then(r=>{
+    if(!c.ghToken){ if(r.ok) tell(`GitHubトークンなし：1時間に${r.limit}回まで使えます。`, "info"); return; }
+    if(r.ok && r.limit > 60) tell(`✅ GitHubトークンOK：1時間に${r.limit.toLocaleString()}回まで使えます（上の「GitHub 残り」が増えました）。`, "info");
+    else if(r.why === "bad") tell("GitHubトークンが正しくないか、期限が切れています。GitHubで作り直して、もう一度貼ってください（前後に空白や改行が入っていないかも確認）。今はトークンなしで使っています。", "warn");
+    else if(r.ok) tell("GitHubトークンを入れましたが、回数が増えませんでした。トークンを作り直してみてください。", "warn");
+    else tell("GitHubに確認できませんでした。ネット接続を確認してください。", "warn");
+  });
 }
 function updateAiMode(){
   $("aiMode").textContent = !cfg().gemKey ? "方式：日英対応表（設定でGemini APIキーを入れると、文章の意味を理解して探せます）" :
@@ -1638,7 +1662,7 @@ $("favCheck").onclick = async ()=>{ $("favCheck").disabled=true; $("favStatus").
 $("expBtn").onclick = exportData;
 $("impFile").onchange = e=>{ const f=e.target.files[0]; if(f) importData(f); e.target.value=""; };
 $("helpBtn").onclick = openHelp;
-renderUsage(); updateAiMode(); checkUpdate(false); renderNotices(); renderFavs();
+renderUsage(); updateAiMode(); checkUpdate(false); renderNotices(); renderFavs(); refreshRate();
 loadParent();
 loadDangerList();
 checkFavUpdates(false);
