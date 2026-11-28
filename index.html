@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Git Getter">
 <meta name="theme-color" content="#1f3864">
-<meta name="app-version" content="1.9.8">
+<meta name="app-version" content="1.9.9">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -81,6 +81,7 @@ h2{font-size:18px;margin:0 0 8px}h3{font-size:15px;margin:14px 0 6px}
 .star{background:none;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:15px;cursor:pointer;font-family:inherit}
 .star.on{background:#fff6d6;border-color:#e3b400}
 .notice{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:8px;margin:6px 0;font-size:14px}
+.notice>span{flex:1}
 .notice.red{background:var(--redbg)}.notice.yellow{background:var(--yellowbg)}.notice.warn{background:var(--yellowbg)}.notice.info{background:#e8f0fe}
 .notice .nx{margin-left:auto;background:none;border:none;font-size:16px;cursor:pointer;color:var(--sub)}
 .fav{padding:10px 0;border-bottom:1px solid var(--line)}
@@ -235,7 +236,7 @@ pre.manual{white-space:pre-wrap;font-family:inherit;font-size:14px;background:#f
 <script>
 "use strict";
 /* ===== App version (change this, the app-version meta tag and version.json together when releasing) ===== */
-const APP_VERSION = "1.9.8";
+const APP_VERSION = "1.9.9";
 
 /* ===== Storage helpers ===== */
 const LS = {
@@ -1456,23 +1457,34 @@ function updateAiMode(){
 
 /* ===== Phase 2: notices ===== */
 function jstDate(){ return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo"}).format(new Date()); }
-function notify(msg, lv="info"){
+function notify(msg, lv="info", repo){
   const list = LS.get("notices", []);
-  list.unshift({id:Date.now()+Math.random(), msg, lv, at:new Date().toISOString(), read:false});
+  list.unshift({id:Date.now()+Math.random(), msg, lv, at:new Date().toISOString(), read:false, repo: repo || ""});
   LS.set("notices", list.slice(0,50)); renderNotices();
 }
+/* which app a notice is about (older notices: read it from the text) */
+const noticeRepo = n => n.repo || ((String(n.msg).match(/^([\w.-]+\/[\w.-]+) に新しい版/) || [])[1]) || "";
+function openFromNotice(id){
+  const l = LS.get("notices", []); const x = l.find(n=>String(n.id)===String(id)); if(!x) return;
+  x.read = true; LS.set("notices", l); renderNotices();
+  $("dlModal").classList.remove("on");
+  const [o, n] = noticeRepo(x).split("/"); if(o && n) openRepo(o, n);
+}
+const openBtn = n => noticeRepo(n) ? `<button class="btn sm" data-open="${n.id}">開く</button>` : "";
 function renderNotices(){
   const list = LS.get("notices", []); const unread = list.filter(n=>!n.read);
   const c = $("bellCnt"); c.textContent = unread.length; c.classList.toggle("hidden", !unread.length);
-  $("notices").innerHTML = unread.slice(0,5).map(n=>`<div class="notice ${n.lv}"><span>${n.lv==="red"?"🔴":n.lv==="yellow"?"⬆":n.lv==="warn"?"⚠":"ℹ"} ${esc(n.msg)}</span><button class="nx" data-n="${n.id}" title="確認した">✕</button></div>`).join("");
+  $("notices").innerHTML = unread.slice(0,5).map(n=>`<div class="notice ${n.lv}"><span>${n.lv==="red"?"🔴":n.lv==="yellow"?"⬆":n.lv==="warn"?"⚠":"ℹ"} ${esc(n.msg)}</span>${openBtn(n)}<button class="nx" data-n="${n.id}" title="確認した">✕</button></div>`).join("");
+  $("notices").querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openFromNotice(b.dataset.open));
   $("notices").querySelectorAll("[data-n]").forEach(b=>b.onclick=()=>{ const l=LS.get("notices",[]); const x=l.find(n=>String(n.id)===b.dataset.n); if(x) x.read=true; LS.set("notices",l); renderNotices(); });
 }
 function openNotices(){
   const list = LS.get("notices", []);
   const s = $("dlSheet"); $("dlModal").classList.add("on");
-  s.innerHTML = `<h2>🔔 お知らせ</h2>${list.length? list.map(n=>`<div class="notice ${n.lv}"><span>${esc(n.at.slice(0,16).replace("T"," "))}<br>${esc(n.msg)}</span></div>`).join("") : `<div class="note">お知らせはありません。</div>`}
+  s.innerHTML = `<h2>🔔 お知らせ</h2>${list.length? list.map(n=>`<div class="notice ${n.lv}"><span>${esc(jstStamp(new Date(n.at)))}<br>${esc(n.msg)}</span>${openBtn(n)}</div>`).join("") : `<div class="note">お知らせはありません。</div>`}
    <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn sub" id="nClear">すべて既読にする</button><button class="btn" id="nClose">閉じる</button></div>`;
   $("nClose").onclick = ()=>$("dlModal").classList.remove("on");
+  s.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openFromNotice(b.dataset.open));
   $("nClear").onclick = ()=>{ LS.set("notices", list.map(n=>Object.assign(n,{read:true}))); renderNotices(); $("dlModal").classList.remove("on"); };
 }
 
@@ -1532,7 +1544,7 @@ async function checkFavUpdates(force){
       const rel = (rels||[]).find(r=>!r.draft); if(!rel) continue;
       if(rel.tag_name && f.tag && rel.tag_name !== f.tag && rel.tag_name !== f.newTag){
         f.newTag = rel.tag_name; found++;
-        notify(`${f.full} に新しい版 ${rel.tag_name} が出ました`, "yellow");
+        notify(`${f.full} に新しい版 ${rel.tag_name} が出ました`, "yellow", f.full);
       }
       if(!f.tag) f.tag = rel.tag_name || "";
         f.lastCheck = Date.now();
